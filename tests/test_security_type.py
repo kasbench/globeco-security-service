@@ -4,7 +4,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 os.environ["MONGODB_DB"] = "test_securities"
 import pytest
 import pytest_asyncio
-import asyncio
 import socket
 import threading
 import time

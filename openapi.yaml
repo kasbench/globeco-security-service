@@ -1,0 +1,140 @@
+openapi: 3.0.3
+info:
+  title: GlobeCo Security Service - Security Type API
+  version: 1.0.0
+  description: |
+    The GlobeCo Security Service provides REST APIs for managing security types as part of the GlobeCo Suite. All endpoints are prefixed with `/api/v1/`.
+    
+    Author: Noah Krieger
+servers:
+  - url: http://localhost:8000/api/v1
+paths:
+  /securityTypes:
+    get:
+      summary: Get all security types
+      operationId: getSecurityTypes
+      tags: [SecurityType]
+      responses:
+        '200':
+          description: List of security types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SecurityTypeOut'
+    post:
+      summary: Create a new security type
+      operationId: createSecurityType
+      tags: [SecurityType]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityTypeIn'
+      responses:
+        '201':
+          description: Created security type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityTypeOut'
+        '409':
+          description: Conflict (duplicate abbreviation)
+  /securityType/{securityTypeId}:
+    get:
+      summary: Get a specific security type
+      operationId: getSecurityType
+      tags: [SecurityType]
+      parameters:
+        - name: securityTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Security type object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityTypeOut'
+        '404':
+          description: Not found
+    put:
+      summary: Update a security type
+      operationId: updateSecurityType
+      tags: [SecurityType]
+      parameters:
+        - name: securityTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityTypeIn'
+      responses:
+        '200':
+          description: Updated security type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityTypeOut'
+        '404':
+          description: Not found
+        '409':
+          description: Version conflict
+    delete:
+      summary: Delete a security type
+      operationId: deleteSecurityType
+      tags: [SecurityType]
+      parameters:
+        - name: securityTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+        '409':
+          description: Version conflict
+components:
+  schemas:
+    SecurityTypeIn:
+      type: object
+      required:
+        - abbreviation
+        - description
+        - version
+      properties:
+        abbreviation:
+          type: string
+          minLength: 1
+          maxLength: 10
+        description:
+          type: string
+          minLength: 1
+          maxLength: 100
+        version:
+          type: integer
+          default: 1
+    SecurityTypeOut:
+      allOf:
+        - $ref: '#/components/schemas/SecurityTypeIn'
+        - type: object
+          properties:
+            securityTypeId:
+              type: string 

@@ -1,7 +1,5 @@
 from beanie import Document
 from pydantic import Field
-from typing import Optional
-from bson import ObjectId
 
 class SecurityType(Document):
     abbreviation: str = Field(..., min_length=1, max_length=10, description="Unique abbreviation")

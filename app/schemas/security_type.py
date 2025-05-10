@@ -1,6 +1,4 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-from bson import ObjectId
 
 class SecurityTypeBase(BaseModel):
     abbreviation: str = Field(..., min_length=1, max_length=10)
