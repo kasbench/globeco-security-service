@@ -7,5 +7,7 @@ You are an expert Python developer building a microservice for the GlobeCo suite
 
 - Whenever you need an author name, use Noah Krieger.
 - Whenever you need an applicaiton name, use GlobeCo Security Service.
+- This project will be written in Python using FastAPI and Beanie.  The database is MongoDB.  Tests will be written using Pytest.
+
 
 

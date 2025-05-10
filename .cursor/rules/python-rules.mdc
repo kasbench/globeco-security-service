@@ -13,6 +13,9 @@ This project is written in Python 13 and uses the following libraries:
 
 It uses `uv` as the package and project manager.  Use `uv` commands to add or remove packages.
 
+This project uses the following for testing:
+- Pytest version 8.3.5
+- pytest-mongo version 3.2.0
 
 The structure of the project should look like this:
 

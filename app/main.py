@@ -1,15 +1,20 @@
 import asyncio
+from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from app.config import settings
+from app.models.security_type import SecurityType
+from app.api.routes import router as api_router
 
-async def init_db():
+app = FastAPI(title="GlobeCo Security Service", version="1.0.0")
+
+@app.on_event("startup")
+async def on_startup():
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB]
-    # Import your document models here and pass them to init_beanie
-    # from app.models.security_type import SecurityType
-    # from app.models.security import Security
-    await init_beanie(database=db, document_models=[])
+    await init_beanie(database=db, document_models=[SecurityType])
+
+app.include_router(api_router)
 
 if __name__ == "__main__":
-    asyncio.run(init_db())
+    asyncio.run(on_startup())
