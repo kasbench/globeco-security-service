@@ -6,6 +6,7 @@ from app.config import settings
 from app.models.security_type import SecurityType
 from app.models.security import Security
 from app.api.routes import router as api_router
+from app.api.health import router as health_router
 import os
 
 app = FastAPI(title="GlobeCo Security Service", version="1.0.0")
@@ -17,6 +18,7 @@ async def on_startup():
     await init_beanie(database=db, document_models=[SecurityType, Security])
 
 app.include_router(api_router)
+app.include_router(health_router)
 
 if os.environ.get("TEST_MODE") == "1":
     from app.api.utils_routes import router as test_utils_router

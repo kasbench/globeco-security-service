@@ -77,5 +77,17 @@ Actions:
 5. Added maintainer and application labels as required.
 
 
+Prompt: I will be deploying this service to Kubernetes.  We need to implement liveness, readiness, and startup health checks.  What do you recommend for each?
+Actions:
+1. Added a new app/api/health.py router with /health/liveness, /health/readiness, and /health/startup   endpoints:
+   - Liveness: Always returns 200 OK if the process is running.
+   - Readiness/Startup: Check MongoDB connectivity and return 200 if reachable, 503 otherwise.
+2. Included the health check router in your FastAPI app, so these endpoints are now available.
+
+
+Prompt: Please create all the files necessary to deploy to this application as a service to Kubernetes.  Please include the liveness, readiness, and startup probes you just created.  The deployment should start with one instance of the service and should scale up to a maximum of 100 instances.  It should have up 100 millicores and 200 MiB of memory.  The name of the service is `globeco-security-service` in the `globeco` namespace.  You do not need to create the namespace. Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+Actions:
+1. Created kubernetes/deployment.yaml with a Deployment for globeco-security-service, including resource requests/limits, liveness, readiness, and startup probes, and an HPA for autoscaling from 1 to 100 pods.
+2. Created kubernetes/service.yaml with a ClusterIP Service exposing port 8000 for the deployment.
 
 
