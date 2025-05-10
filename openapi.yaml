@@ -111,6 +111,110 @@ paths:
           description: Not found
         '409':
           description: Version conflict
+  /securities:
+    get:
+      summary: Get all securities
+      operationId: getSecurities
+      tags: [Security]
+      responses:
+        '200':
+          description: List of securities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SecurityOut'
+    post:
+      summary: Create a new security
+      operationId: createSecurity
+      tags: [Security]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityIn'
+      responses:
+        '201':
+          description: Created security
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityOut'
+        '400':
+          description: Invalid securityTypeId
+        '409':
+          description: Conflict (duplicate ticker)
+  /security/{securityId}:
+    get:
+      summary: Get a specific security
+      operationId: getSecurity
+      tags: [Security]
+      parameters:
+        - name: securityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Security object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityOut'
+        '404':
+          description: Not found
+    put:
+      summary: Update a security
+      operationId: updateSecurity
+      tags: [Security]
+      parameters:
+        - name: securityId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityIn'
+      responses:
+        '200':
+          description: Updated security
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityOut'
+        '404':
+          description: Not found
+        '409':
+          description: Version conflict
+    delete:
+      summary: Delete a security
+      operationId: deleteSecurity
+      tags: [Security]
+      parameters:
+        - name: securityId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+        '409':
+          description: Version conflict
 components:
   schemas:
     SecurityTypeIn:
@@ -137,4 +241,43 @@ components:
         - type: object
           properties:
             securityTypeId:
-              type: string 
+              type: string
+    SecurityIn:
+      type: object
+      required:
+        - ticker
+        - description
+        - securityTypeId
+        - version
+      properties:
+        ticker:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 200
+        securityTypeId:
+          type: string
+        version:
+          type: integer
+          default: 1
+    SecurityTypeNested:
+      type: object
+      properties:
+        securityTypeId:
+          type: string
+        abbreviation:
+          type: string
+        description:
+          type: string
+    SecurityOut:
+      allOf:
+        - $ref: '#/components/schemas/SecurityIn'
+        - type: object
+          properties:
+            securityId:
+              type: string
+            securityType:
+              $ref: '#/components/schemas/SecurityTypeNested' 

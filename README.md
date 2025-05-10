@@ -109,6 +109,99 @@ curl -X PUT http://localhost:8000/api/v1/securityType/<securityTypeId> \
 curl -X DELETE http://localhost:8000/api/v1/securityType/<securityTypeId>?version=1
 ```
 
+## Security Data Model
+
+| Database Field    | API Field      | Type      | Constraints                                      |
+|------------------|---------------|-----------|--------------------------------------------------|
+| _id              | securityId    | ObjectId  | Unique                                           |
+| ticker           | ticker        | String    | Unique, Required, 1-50 characters                |
+| description      | description   | String    | Required, 1-200 characters                       |
+| security_type_id | securityTypeId| ObjectId  | Foreign key to securityType, Required            |
+| version          | version       | Number    | Required, Default: 1                             |
+
+## Security API
+
+All endpoints are prefixed with `/api/v1/`.
+
+### DTOs
+
+#### Security
+| Verb   | Payload Fields                                 | Return Fields                                                      |
+|--------|------------------------------------------------|--------------------------------------------------------------------|
+| GET    |                                                | securityId, ticker, description, securityType (securityTypeId, abbreviation, description), version |
+| POST   | ticker, description, securityTypeId, version   | securityId, ticker, description, securityType (securityTypeId, abbreviation, description), version |
+| PUT    | securityId, ticker, description, securityTypeId, version | securityId, ticker, description, securityType (securityTypeId, abbreviation, description), version |
+| DELETE |                                                |                                                                    |
+
+### Endpoints
+
+#### Get all securities
+- **GET** `/api/v1/securities`
+- **Response:** List of securities
+
+#### Get a specific security
+- **GET** `/api/v1/security/{securityId}`
+- **Response:** Security object
+
+#### Create a new security
+- **POST** `/api/v1/securities`
+- **Payload:**
+  ```json
+  {
+    "ticker": "AAPL",
+    "description": "Apple Inc.",
+    "securityTypeId": "<securityTypeId>",
+    "version": 1
+  }
+  ```
+- **Response:** Created security object
+
+#### Update a security
+- **PUT** `/api/v1/security/{securityId}`
+- **Payload:**
+  ```json
+  {
+    "ticker": "AAPL",
+    "description": "Updated description",
+    "securityTypeId": "<securityTypeId>",
+    "version": 1
+  }
+  ```
+- **Response:** Updated security object
+
+#### Delete a security
+- **DELETE** `/api/v1/security/{securityId}?version={version}`
+- **Response:** 204 No Content
+
+### Optimistic Concurrency
+All update and delete operations require the correct `version` field. If the version does not match, a 409 Conflict is returned.
+
+## Example Usage (Security)
+
+**Create a security:**
+```bash
+curl -X POST http://localhost:8000/api/v1/securities \
+  -H 'Content-Type: application/json' \
+  -d '{"ticker": "AAPL", "description": "Apple Inc.", "securityTypeId": "<securityTypeId>", "version": 1}'
+```
+
+**Get all securities:**
+```bash
+curl http://localhost:8000/api/v1/securities
+```
+
+**Update a security:**
+```bash
+curl -X PUT http://localhost:8000/api/v1/security/<securityId> \
+  -H 'Content-Type: application/json' \
+  -d '{"ticker": "AAPL", "description": "Updated", "securityTypeId": "<securityTypeId>", "version": 1}'
+```
+
+**Delete a security:**
+```bash
+curl -X DELETE http://localhost:8000/api/v1/security/<securityId>?version=1
+```
+
 ## Running the Service
 
 1. Ensure MongoDB is running on `localhost:27017`.

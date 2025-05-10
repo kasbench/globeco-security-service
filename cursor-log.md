@@ -42,6 +42,14 @@ Actions:
 2. Created openapi.yaml in the project root with a complete OpenAPI 3.0.3 specification for all security type endpoints, request/response schemas, and error responses.
 
 
+Prompt: Please update the openapi schema `openapi.yaml` with the spec for security.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+Actions:
+1. Reviewed the requirements and current openapi.yaml for the securityType API.
+2. Added all security endpoints (/securities, /security/{securityId}) to the OpenAPI spec, including GET, POST, PUT, and DELETE.
+3. Added SecurityIn, SecurityOut, and SecurityTypeNested schemas to components.
+4. Documented all request/response payloads, error responses, and optimistic concurrency for the security API.
+
+
 Prompt: Please implement the APIs for security using the requirements provided in @requirements.md.  Use the code for security type as an example.  Strive for consistency.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
 Actions:
 1. Reviewed requirements.md and security type code for consistency.
@@ -50,6 +58,14 @@ Actions:
 4. Implemented app/services/security_service.py for CRUD operations and optimistic concurrency control, including joins with SecurityType.
 5. Updated app/api/routes.py to add all required security endpoints, following the same style as securityType.
 6. Updated app/main.py to initialize Beanie with both Security and SecurityType models.
+
+
+Prompt: Please add documentation for the security data model and API to readme.md.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+Actions:
+1. Reviewed the README.md and requirements for the security data model and API.
+2. Added a section for the security data model, including a table of fields and constraints.
+3. Documented the security API endpoints, DTOs, and optimistic concurrency behavior.
+4. Added example usage for all CRUD operations on the security API, following the style of the security type documentation.
 
 
 
