@@ -1,6 +1,5 @@
 from beanie import Document
 from pydantic import Field, ConfigDict
-from typing import Optional
 from bson import ObjectId
 
 class Security(Document):

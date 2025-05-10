@@ -1,8 +1,8 @@
 from app.models.security_type import SecurityType
-from app.schemas.security_type import SecurityTypeIn, SecurityTypeOut, SecurityTypeUpdate
-from typing import List, Optional
+from app.schemas.security_type import SecurityTypeIn, SecurityTypeOut
+from typing import List
 from beanie import PydanticObjectId
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 
 async def get_all_security_types() -> List[SecurityTypeOut]:
     security_types = await SecurityType.find_all().to_list()
