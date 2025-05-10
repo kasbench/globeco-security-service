@@ -11,3 +11,4 @@ Please perform each step when instructed.  Only perform one step at a time.
 7. Please create pytest tests for the code you created in the previous step.  Please use @test_security_type.py as an example.  Strive for consistency.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
 8. Please add documentation for the security data model and API to readme.md.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
 9. Please update the openapi schema `openapi.yaml` with the spec for security.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+10. Please create a Dockerfile for this application.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.

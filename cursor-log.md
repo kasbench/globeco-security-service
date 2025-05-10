@@ -68,5 +68,14 @@ Actions:
 4. Added example usage for all CRUD operations on the security API, following the style of the security type documentation.
 
 
+Prompt: Please create a Dockerfile for this application.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+Actions:
+1. Created a Dockerfile using the official Python 3.13-slim image.
+2. Installed system dependencies and uv (universal package manager).
+3. Copied the project files and installed Python dependencies with uv.
+4. Exposed port 8000 and set the default command to run the FastAPI app with Uvicorn.
+5. Added maintainer and application labels as required.
+
+
 
 
