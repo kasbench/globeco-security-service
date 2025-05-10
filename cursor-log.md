@@ -91,3 +91,9 @@ Actions:
 2. Created kubernetes/service.yaml with a ClusterIP Service exposing port 8000 for the deployment.
 
 
+Prompt: Please document the health checks (liveness, readiness/startup) in the README.md file and the openapi.yaml OpenAPI spec.  Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
+Actions:
+1. Added a Health Checks section to README.md, documenting the liveness, readiness, and startup endpoints, their purpose, and example Kubernetes probe configuration.
+2. Updated openapi.yaml to include /health/liveness, /health/readiness, and /health/startup endpoints, with response schemas and descriptions.
+
+

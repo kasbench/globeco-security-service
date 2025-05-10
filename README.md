@@ -218,5 +218,40 @@ Run all tests with:
 pytest
 ```
 
+## Health Checks (Kubernetes Probes)
+
+The GlobeCo Security Service implements three health check endpoints for robust Kubernetes deployment:
+
+| Endpoint              | Purpose    | Description |
+|-----------------------|------------|-------------|
+| `/health/liveness`    | Liveness   | Returns 200 OK if the process is running. Used to detect if the container should be restarted. |
+| `/health/readiness`   | Readiness  | Returns 200 OK if the service can connect to MongoDB. Used to determine if the pod is ready to receive traffic. Returns 503 if not ready. |
+| `/health/startup`     | Startup    | Returns 200 OK if the service has started and can connect to MongoDB. Used to delay liveness checks until startup is complete. Returns 503 if not started. |
+
+### Example Kubernetes Probe Configuration
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health/liveness
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /health/readiness
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+startupProbe:
+  httpGet:
+    path: /health/startup
+    port: 8000
+  failureThreshold: 30
+  periodSeconds: 10
+```
+
+See the `/kubernetes/deployment.yaml` for a full example.
+
 ---
 For more details, see the `documentation/requirements.md` file.

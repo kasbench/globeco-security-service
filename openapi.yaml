@@ -215,6 +215,54 @@ paths:
           description: Not found
         '409':
           description: Version conflict
+  /health/liveness:
+    get:
+      summary: Liveness probe
+      description: Returns 200 OK if the process is running. Used by Kubernetes to determine if the container should be restarted.
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /health/readiness:
+    get:
+      summary: Readiness probe
+      description: Returns 200 OK if the service can connect to MongoDB. Used by Kubernetes to determine if the pod is ready to receive traffic. Returns 503 if not ready.
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /health/startup:
+    get:
+      summary: Startup probe
+      description: Returns 200 OK if the service has started and can connect to MongoDB. Used by Kubernetes to delay liveness checks until startup is complete. Returns 503 if not started.
+      tags: [Health]
+      responses:
+        '200':
+          description: Service has started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service has not started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
 components:
   schemas:
     SecurityTypeIn:
@@ -280,4 +328,10 @@ components:
             securityId:
               type: string
             securityType:
-              $ref: '#/components/schemas/SecurityTypeNested' 
+              $ref: '#/components/schemas/SecurityTypeNested'
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: alive 
