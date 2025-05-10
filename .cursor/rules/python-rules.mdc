@@ -1,0 +1,35 @@
+---
+description: 
+globs: *.py
+alwaysApply: false
+---
+This project is written in Python 13 and uses the following libraries:
+- FastAPI version 0.115.12
+- PyMongo version 4.12.1
+- gunicorn version 23.0.0
+- dnspython version 2.7.0
+- beanie version 1.29
+- pydantic version 2.11
+
+It uses `uv` as the package and project manager.  Use `uv` commands to add or remove packages.
+
+
+The structure of the project should look like this:
+
+globeco-security-service/
+├── app/
+│   ├── main.py
+│   ├── api/
+│   │   └── routes.py
+│   ├── models/
+│   │   └── security.py
+│   ├── schemas/
+│   │   └── security.py
+│   ├── services/
+│   │   └── security_service.py
+│   └── config.py
+├── tests/
+│   └── test_main.py
+├── requirements.txt
+└── README.md
+

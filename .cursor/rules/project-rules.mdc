@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+You are an expert Python developer building a microservice for the GlobeCo suite.
+
+- Whenever you need an author name, use Noah Krieger.
+- Whenever you need an applicaiton name, use GlobeCo Security Service.
+
+
