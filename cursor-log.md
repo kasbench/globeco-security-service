@@ -109,4 +109,10 @@ Actions:
 
 # 2024-07-09: Request to add a GitHub Actions workflow for multiarchitecture Docker build and push to DockerHub. User will configure DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, and DOCKERHUB_REPO secrets. -- Noah Krieger
 
+Prompt: Please add CORS configuration to allow all origins
+Actions:
+1. Located app/main.py where the FastAPI app is created.
+2. Imported CORSMiddleware from fastapi.middleware.cors.
+3. Added app.add_middleware call to allow all origins, methods, and headers, with credentials enabled, before including routers.
+
 

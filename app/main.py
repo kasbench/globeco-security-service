@@ -8,8 +8,18 @@ from app.models.security import Security
 from app.api.routes import router as api_router
 from app.api.health import router as health_router
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="GlobeCo Security Service", version="1.0.0")
+
+# Allow all origins for CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def on_startup():
