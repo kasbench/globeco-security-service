@@ -35,7 +35,8 @@ async def get_security(security_id: str) -> SecurityOut:
     if not st:
         raise HTTPException(status_code=400, detail="Invalid securityTypeId")
     return SecurityOut(
-        securityId=str(sec.id),
+        # securityId=str(sec.id),
+        securityId = str(security_id),
         ticker=sec.ticker,
         description=sec.description,
         securityTypeId=str(sec.security_type_id),
