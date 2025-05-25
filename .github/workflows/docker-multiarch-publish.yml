@@ -9,6 +9,12 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate DockerHub repository
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_REPO }}" ]; then
+            echo "Error: DOCKERHUB_REPO is not set."
+            exit 1
+          fi
       - name: Checkout code
         uses: actions/checkout@v4
 
