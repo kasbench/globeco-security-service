@@ -2,9 +2,19 @@ Instructions:
 - Log every request that you receive.
 - Log every action that you take in an enumerated list.
 - Follow the format provided below.  
-- Add each new entry at the end.
+- Add each new entry at the end.  NEVER delete or replace an entry.  Only add entries at the end.
 - Make sure there are two blank lines between each section.
+- Please remember these instructions.
 
+
+Prompt: Sample prompt.  Do not delete.  Add new prompts after this one.
+Actions:
+1. Action 1
+2. Action 2
+3. Action 3
+
+
+---
 
 Prompt: Configure the project to connect to the MongoDB database on localhost at port 27017 and database `securities`. Please add an entry with this prompt and your actions in the cursor-log.md file following the instructions in the file.
 Actions:
@@ -95,5 +105,8 @@ Prompt: Please document the health checks (liveness, readiness/startup) in the R
 Actions:
 1. Added a Health Checks section to README.md, documenting the liveness, readiness, and startup endpoints, their purpose, and example Kubernetes probe configuration.
 2. Updated openapi.yaml to include /health/liveness, /health/readiness, and /health/startup endpoints, with response schemas and descriptions.
+
+
+# 2024-07-09: Request to add a GitHub Actions workflow for multiarchitecture Docker build and push to DockerHub. User will configure DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, and DOCKERHUB_REPO secrets. -- Noah Krieger
 
 
