@@ -1,12 +1,20 @@
 openapi: 3.0.3
 info:
-  title: GlobeCo Security Service - Security Type API
-  version: 1.0.0
+  title: GlobeCo Security Service API
+  version: 2.0.0
   description: |
     The GlobeCo Security Service provides REST APIs for managing security types and securities as part of the GlobeCo Suite.
     
-    - **All main APIs are prefixed with `/api/v1/`.**
-    - **Health check endpoints (`/health/liveness`, `/health/readiness`, `/health/startup`) are available at the root and are NOT prefixed with `/api/v1`.**
+    ## API Versions
+    - **v1 APIs**: Traditional CRUD operations prefixed with `/api/v1/`
+    - **v2 APIs**: Advanced search capabilities prefixed with `/api/v2/`
+    - **Health check endpoints**: Available at the root (`/health/liveness`, `/health/readiness`, `/health/startup`)
+    
+    ## v2 Search API Features
+    - Exact and partial ticker search (case-insensitive)
+    - Advanced pagination with comprehensive metadata
+    - Parameter validation and error handling
+    - Optimized MongoDB queries with indexing
     
     Author: Noah Krieger
 servers:
@@ -219,6 +227,104 @@ paths:
           description: Not found
         '409':
           description: Version conflict
+  /api/v2/securities:
+    get:
+      summary: Search securities with advanced filtering
+      description: |
+        Search securities with advanced filtering and pagination capabilities.
+        
+        - **ticker**: Exact ticker match (case-insensitive)
+        - **ticker_like**: Partial ticker match (case-insensitive)  
+        - **limit**: Maximum results per page (1-1000, default: 50)
+        - **offset**: Number of results to skip (default: 0)
+        
+        Only one of ticker or ticker_like can be provided.
+        If neither is provided, returns all securities with pagination.
+      operationId: searchSecurities
+      tags: [Security v2]
+      parameters:
+        - name: ticker
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9.-]{1,50}$'
+          description: Exact ticker search (case-insensitive)
+          example: AAPL
+        - name: ticker_like
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9.-]{1,50}$'
+          description: Partial ticker search (case-insensitive)
+          example: APP
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: Maximum number of results
+          example: 10
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of results to skip
+          example: 20
+      responses:
+        '200':
+          description: Search results with pagination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritySearchResponse'
+        '400':
+          description: Bad Request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Only one of 'ticker' or 'ticker_like' parameters can be provided"
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        loc:
+                          type: array
+                          items:
+                            type: string
+                        msg:
+                          type: string
+                        type:
+                          type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Internal server error"
   /health/liveness:
     get:
       summary: Liveness probe
@@ -338,4 +444,86 @@ components:
       properties:
         status:
           type: string
-          example: alive 
+          example: alive
+    SecurityV2:
+      type: object
+      properties:
+        securityId:
+          type: string
+          description: Unique identifier for the security
+          example: "60c72b2f9b1e8b3f8c8b4567"
+        ticker:
+          type: string
+          description: Security ticker symbol
+          example: "AAPL"
+        description:
+          type: string
+          description: Security description
+          example: "Apple Inc. Common Stock"
+        securityTypeId:
+          type: string
+          description: Reference to security type
+          example: "60c72b2f9b1e8b3f8c8b4568"
+        version:
+          type: integer
+          description: Version for optimistic concurrency
+          example: 1
+        securityType:
+          $ref: '#/components/schemas/SecurityTypeNestedV2'
+    SecurityTypeNestedV2:
+      type: object
+      properties:
+        securityTypeId:
+          type: string
+          description: Unique identifier for the security type
+          example: "60c72b2f9b1e8b3f8c8b4568"
+        abbreviation:
+          type: string
+          description: Security type abbreviation
+          example: "CS"
+        description:
+          type: string
+          description: Security type description
+          example: "Common Stock"
+        version:
+          type: integer
+          description: Version for optimistic concurrency
+          example: 1
+    PaginationInfo:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          description: Total number of elements across all pages
+          example: 150
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 3
+        currentPage:
+          type: integer
+          description: Current page number (0-based)
+          example: 0
+        pageSize:
+          type: integer
+          description: Number of elements per page
+          example: 50
+        hasNext:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        hasPrevious:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+    SecuritySearchResponse:
+      type: object
+      properties:
+        securities:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityV2'
+          description: List of securities matching the search criteria
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+          description: Pagination information

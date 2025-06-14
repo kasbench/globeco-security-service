@@ -202,6 +202,131 @@ curl -X PUT http://localhost:8000/api/v1/security/<securityId> \
 curl -X DELETE http://localhost:8000/api/v1/security/<securityId>?version=1
 ```
 
+## Security Search API (v2)
+
+The v2 API provides advanced search capabilities for securities while maintaining full backward compatibility with the v1 API.
+
+### Endpoint
+
+#### Search securities with advanced filtering
+- **GET** `/api/v2/securities`
+- **Query Parameters:**
+
+| Parameter | Type | Required | Description | Example |
+|-----------|------|----------|-------------|---------|
+| `ticker` | string | No | Search by exact ticker symbol (case-insensitive) | `AAPL` |
+| `ticker_like` | string | No | Search by partial ticker match (case-insensitive) | `APP` |
+| `limit` | integer | No | Maximum number of results (default: 50, max: 1000) | `10` |
+| `offset` | integer | No | Number of results to skip for pagination (default: 0) | `20` |
+
+### Parameter Validation Rules
+
+1. **Mutual Exclusivity**: Only one of `ticker` or `ticker_like` can be provided
+2. **Ticker Format**: Must be 1-50 characters, alphanumeric, dots, and hyphens only
+3. **Limit Bounds**: Must be between 1 and 1000
+4. **Offset Bounds**: Must be >= 0
+5. **Default Behavior**: If no search parameters provided, return all securities with pagination
+
+### Response Schema
+
+```json
+{
+  "securities": [
+    {
+      "securityId": "string (ObjectId)",
+      "ticker": "string",
+      "description": "string",
+      "securityTypeId": "string (ObjectId)",
+      "version": integer,
+      "securityType": {
+        "securityTypeId": "string (ObjectId)",
+        "abbreviation": "string",
+        "description": "string",
+        "version": integer
+      }
+    }
+  ],
+  "pagination": {
+    "totalElements": integer,
+    "totalPages": integer,
+    "currentPage": integer,
+    "pageSize": integer,
+    "hasNext": boolean,
+    "hasPrevious": boolean
+  }
+}
+```
+
+### Example Usage (v2 API)
+
+**Get all securities with pagination:**
+```bash
+curl "http://localhost:8000/api/v2/securities?limit=10&offset=0"
+```
+
+**Search by exact ticker:**
+```bash
+curl "http://localhost:8000/api/v2/securities?ticker=AAPL"
+```
+
+**Search by partial ticker:**
+```bash
+curl "http://localhost:8000/api/v2/securities?ticker_like=APP&limit=5"
+```
+
+**Paginated search:**
+```bash
+curl "http://localhost:8000/api/v2/securities?ticker_like=A&limit=10&offset=20"
+```
+
+### Error Responses
+
+#### HTTP 400 - Bad Request
+```json
+{
+  "detail": "Only one of 'ticker' or 'ticker_like' parameters can be provided"
+}
+```
+
+#### HTTP 422 - Validation Error
+```json
+{
+  "detail": [
+    {
+      "loc": ["query", "ticker"],
+      "msg": "String should match pattern '^[A-Za-z0-9.-]{1,50}$'",
+      "type": "string_pattern_mismatch"
+    }
+  ]
+}
+```
+
+### Integration with Order Service
+
+The v2 API is designed for integration with the Order Service to resolve tickers to security IDs:
+
+```python
+# Example integration pattern
+async def resolve_ticker_to_security_id(ticker: str) -> Optional[str]:
+    response = await security_service_client.get(
+        f"/api/v2/securities?ticker={ticker}"
+    )
+    if response.status_code == 200:
+        data = response.json()
+        if data["securities"]:
+            return data["securities"][0]["securityId"]
+    return None
+```
+
+### Performance Characteristics
+
+- **Exact ticker lookup**: < 200ms response time
+- **Partial ticker search**: < 500ms response time
+- **Retrieve all securities**: < 300ms response time
+- **Pagination**: < 400ms response time per page
+
+MongoDB indexes are automatically created on the `ticker` field for optimal search performance.
+
 ## Running the Service
 
 1. Ensure MongoDB is running on `localhost:27017`.

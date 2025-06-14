@@ -23,7 +23,7 @@ This enhancement will add a new v2 API endpoint with advanced search capabilitie
 - [ ] Test case-insensitive search behavior
 
 ### Phase 3: Documentation
-- [ ] Update API documentation/OpenAPI spec with v2 endpoints
+- [ ] Update API documentation in the README.md and the OpenAPI spec with v2 endpoints
 - [ ] Create an API Guide for the Order Service LLM documenting the v2 API
 
 ## Required Enhancement
