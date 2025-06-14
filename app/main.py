@@ -6,6 +6,7 @@ from app.config import settings
 from app.models.security_type import SecurityType
 from app.models.security import Security
 from app.api.routes import router as api_router
+from app.api.v2_routes import router as v2_api_router
 from app.api.health import router as health_router
 import os
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,8 +27,16 @@ async def on_startup():
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB]
     await init_beanie(database=db, document_models=[SecurityType, Security])
+    
+    # Create indexes for optimal search performance
+    try:
+        await Security.get_motor_collection().create_index("ticker")  # For exact matches
+        await Security.get_motor_collection().create_index([("ticker", "text")])  # For text search
+    except Exception as e:
+        print(f"Index creation failed: {e}")  # Non-fatal for development
 
 app.include_router(api_router)
+app.include_router(v2_api_router)
 app.include_router(health_router)
 
 if os.environ.get("TEST_MODE") == "1":
