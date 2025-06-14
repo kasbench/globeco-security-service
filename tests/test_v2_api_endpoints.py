@@ -43,8 +43,8 @@ class TestV2APIEndpoints:
             from app.schemas.v2_security import SecuritySearchResponse, SecurityV2, SecurityTypeNestedV2, PaginationInfo
             from bson import ObjectId
             
-            security_id = ObjectId()
-            security_type_id = ObjectId()
+            security_id = str(ObjectId())
+            security_type_id = str(ObjectId())
             
             mock_search.return_value = SecuritySearchResponse(
                 securities=[
@@ -263,8 +263,8 @@ class TestV2APIEndpoints:
             from app.schemas.v2_security import SecuritySearchResponse, SecurityV2, SecurityTypeNestedV2, PaginationInfo
             from bson import ObjectId
             
-            security_id = ObjectId()
-            security_type_id = ObjectId()
+            security_id = str(ObjectId())
+            security_type_id = str(ObjectId())
             
             mock_search.return_value = SecuritySearchResponse(
                 securities=[
@@ -367,9 +367,13 @@ class TestV2APIEndpoints:
 
     def test_backward_compatibility_v1_still_works(self, test_client):
         """Test that v1 API endpoints still work after v2 implementation."""
-        # This test ensures we haven't broken existing functionality
-        response = test_client.get("/api/v1/securities")
-        
-        # Should not return 404 (endpoint exists)
-        # Actual response depends on database state, but endpoint should be accessible
-        assert response.status_code != 404 
+        with patch('app.services.security_service.get_all_securities') as mock_get_all:
+            mock_get_all.return_value = []
+            
+            # This test ensures we haven't broken existing functionality
+            response = test_client.get("/api/v1/securities")
+            
+            # Should return 200 and list format (not paginated object)
+            assert response.status_code == 200
+            data = response.json()
+            assert isinstance(data, list) 
