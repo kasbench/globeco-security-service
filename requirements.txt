@@ -50,3 +50,12 @@ uvicorn==0.34.2
 uvloop==0.21.0
 watchfiles==1.0.5
 websockets==15.0.1
+
+# OpenTelemetry for tracing and metrics
+opentelemetry-api>=1.25.0
+opentelemetry-sdk>=1.25.0
+opentelemetry-exporter-otlp>=1.25.0
+opentelemetry-exporter-otlp-proto-grpc>=1.25.0
+opentelemetry-exporter-otlp-proto-http>=1.25.0
+opentelemetry-instrumentation-fastapi>=0.45b0
+opentelemetry-instrumentation-asgi>=0.45b0

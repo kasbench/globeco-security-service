@@ -397,3 +397,25 @@ Each entry follows this format:
 **Result**: All performance tests are now properly skipped. Final test results: 61 passed, 10 skipped. All core API functionality tests pass reliably (test_v2_securities.py: 13/13, test_v2_api_endpoints.py: 15/15, test_v2_api_simple.py: 10/10, test_v2_integration.py: 13/13, core security tests: 11/11). The v2 securities search API is production-ready with comprehensive test coverage.
 
 
+**Date:** 2024-06-10
+**Author:** Noah Krieger
+**Action:** Instrumented FastAPI app for OpenTelemetry
+**Details:**
+- Added OpenTelemetry dependencies to requirements.txt (api, sdk, exporter-otlp, instrumentation-fastapi, instrumentation-asgi).
+- Updated app/config.py to support OTEL endpoint, service name, and insecure flag via environment variables.
+- Instrumented FastAPI app in app/main.py for tracing and metrics using OTLP exporter and FastAPI/ASGI instrumentation.
+- Removed unavailable opentelemetry-instrumentation-motor package and related code.
+- Validated that the app launches successfully in dev mode with `uvicorn app.main:app --reload`.
+- Followed guidance from documentation/OTEL_CONFIGURATION_GUIDE.md.
+
+
+---
+
+**Request:** User asked to log metrics to the OpenTelemetry Collector in the GlobeCo Security Service. Provided example code from another service using both gRPC and HTTP exporters for metrics. Requested to implement similar functionality in this service.
+
+**Timestamp:** 2024-06-11
+**Author:** Noah Krieger
+
+---
+
+
