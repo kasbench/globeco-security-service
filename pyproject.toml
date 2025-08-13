@@ -10,12 +10,19 @@ dependencies = [
     "fastapi[standard]>=0.115.12",
     "gunicorn>=23.0.0",
     "mongo-migrate>=0.1.2",
+    "prometheus-client>=0.21.0",
     "pytest-mongo>=3.2.0",
     "pytest>=8.3.5",
     "pydantic-settings>=2.9.1",
     "pytest-asyncio>=0.26.0",
     "testcontainers[mongodb]>=4.10.0",
     "httpx>=0.28.1",
+    # OpenTelemetry for metrics and tracing
+    "opentelemetry-api>=1.25.0",
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp>=1.25.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
 ]
 
 [tool.pytest.ini_options]
