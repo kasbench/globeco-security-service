@@ -41,7 +41,7 @@
   - Add `_sanitize_unmatched_route()` with ID detection and parameterization
   - _Requirements: 3.2, 3.4, 3.5, 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 7. Implement label formatting utilities
+- [x] 7. Implement label formatting utilities
   - Create `_get_method_label()` to convert HTTP methods to uppercase strings
   - Create `_format_status_code()` to convert numeric status codes to strings
   - Add validation and error handling for invalid method/status values

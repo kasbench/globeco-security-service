@@ -316,7 +316,7 @@ class EnhancedHTTPMetricsMiddleware:
             
             # Extract route pattern and record metrics
             path_pattern = self._extract_route_pattern(path)
-            self._record_metrics(method, path_pattern, str(status_code), duration_ms)
+            self._record_metrics(method, path_pattern, status_code, duration_ms)
     
     def _increment_in_flight(self) -> None:
         """
@@ -410,17 +410,18 @@ class EnhancedHTTPMetricsMiddleware:
         Args:
             method: HTTP method (GET, POST, etc.)
             path: Route pattern (e.g., /api/v1/securities/{id})
-            status: HTTP status code as string
+            status: HTTP status code as string or integer
             duration_ms: Request duration in milliseconds
         """
-        # Normalize method to uppercase
+        # Normalize labels using formatting utilities
         method_label = self._get_method_label(method)
+        status_label = self._format_status_code(status)
         
         # Create structured logging context
         log_context = {
             "method": method_label,
             "path": path,
-            "status": status,
+            "status": status_label,
             "duration_ms": round(duration_ms, 2)
         }
         
@@ -434,7 +435,7 @@ class EnhancedHTTPMetricsMiddleware:
             HTTP_REQUESTS_TOTAL.labels(
                 method=method_label,
                 path=path,
-                status=status
+                status=status_label
             ).inc()
             logger.debug("Prometheus request counter recorded successfully", extra=log_context)
         except Exception as e:
@@ -448,7 +449,7 @@ class EnhancedHTTPMetricsMiddleware:
             HTTP_REQUEST_DURATION.labels(
                 method=method_label,
                 path=path,
-                status=status
+                status=status_label
             ).observe(duration_ms)
             logger.debug("Prometheus request duration recorded successfully", extra=log_context)
             prometheus_success = True
@@ -462,7 +463,7 @@ class EnhancedHTTPMetricsMiddleware:
         attributes = {
             "method": method_label,
             "path": path,
-            "status": status
+            "status": status_label
         }
         
         # Counter metric
@@ -991,14 +992,125 @@ class EnhancedHTTPMetricsMiddleware:
         """
         Convert HTTP method to uppercase string for consistent labeling.
         
+        Validates the method against known HTTP methods and provides
+        consistent error handling for invalid values. Ensures all
+        metrics use standardized method labels.
+        
         Args:
-            method: HTTP method string
+            method: HTTP method string (e.g., 'get', 'POST', 'Put')
             
         Returns:
-            Uppercase method string
+            Uppercase method string (e.g., 'GET', 'POST', 'PUT')
+            Returns 'UNKNOWN' for invalid or missing methods
         """
         try:
-            return method.upper() if method else "UNKNOWN"
+            # Handle None or empty method
+            if not method:
+                logger.debug("Empty or None method provided, using UNKNOWN")
+                return "UNKNOWN"
+            
+            # Convert to uppercase and strip whitespace
+            normalized_method = str(method).strip().upper()
+            
+            # Validate against known HTTP methods
+            valid_methods = {
+                'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS', 
+                'TRACE', 'CONNECT', 'PROPFIND', 'PROPPATCH', 'MKCOL', 
+                'COPY', 'MOVE', 'LOCK', 'UNLOCK'
+            }
+            
+            if normalized_method in valid_methods:
+                logger.debug(f"Valid HTTP method normalized: {method} -> {normalized_method}")
+                return normalized_method
+            else:
+                logger.warning(
+                    "Unknown HTTP method encountered",
+                    extra={"original_method": method, "normalized_method": normalized_method}
+                )
+                return "UNKNOWN"
+                
         except Exception as e:
-            logger.error(f"Failed to format method label: {e}")
+            logger.error(
+                "Failed to format method label",
+                extra={
+                    "method": method, 
+                    "error": str(e), 
+                    "error_type": type(e).__name__
+                }
+            )
             return "UNKNOWN"
+    
+    def _format_status_code(self, status_code: Union[int, str]) -> str:
+        """
+        Convert numeric status code to string for consistent labeling.
+        
+        Validates the status code against valid HTTP status code ranges
+        and provides consistent error handling for invalid values. Ensures
+        all metrics use standardized status code labels.
+        
+        Args:
+            status_code: HTTP status code as integer or string
+            
+        Returns:
+            Status code as string (e.g., '200', '404', '500')
+            Returns '500' for invalid status codes
+        """
+        try:
+            # Handle None or empty status code
+            if status_code is None:
+                logger.debug("None status code provided, using 500")
+                return "500"
+            
+            # Convert to integer first for validation
+            if isinstance(status_code, str):
+                # Handle empty string
+                if not status_code.strip():
+                    logger.debug("Empty status code string provided, using 500")
+                    return "500"
+                
+                # Try to convert string to integer
+                try:
+                    status_int = int(status_code.strip())
+                except ValueError:
+                    logger.warning(
+                        "Invalid status code string format",
+                        extra={"status_code": status_code}
+                    )
+                    return "500"
+            elif isinstance(status_code, (int, float)):
+                status_int = int(status_code)
+            else:
+                logger.warning(
+                    "Unexpected status code type",
+                    extra={"status_code": status_code, "type": type(status_code).__name__}
+                )
+                return "500"
+            
+            # Validate status code range (HTTP status codes are 100-599)
+            if 100 <= status_int <= 599:
+                status_str = str(status_int)
+                logger.debug(f"Valid status code formatted: {status_code} -> {status_str}")
+                return status_str
+            else:
+                logger.warning(
+                    "Status code outside valid HTTP range (100-599)",
+                    extra={"status_code": status_code, "parsed_int": status_int}
+                )
+                # Return appropriate default based on range
+                if status_int < 100:
+                    return "500"  # Treat as server error
+                elif status_int >= 600:
+                    return "500"  # Treat as server error
+                else:
+                    return "500"  # Fallback
+                    
+        except Exception as e:
+            logger.error(
+                "Failed to format status code",
+                extra={
+                    "status_code": status_code,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                }
+            )
+            return "500"
