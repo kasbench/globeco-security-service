@@ -6,7 +6,7 @@
   - Define global metrics registry dictionary for tracking created metrics
   - _Requirements: 2.1, 2.2, 4.1, 4.2_
 
-- [ ] 2. Implement Prometheus HTTP metrics
+- [x] 2. Implement Prometheus HTTP metrics
   - Create Prometheus Counter for `http_requests_total` with method, path, status labels
   - Create Prometheus Histogram for `http_request_duration` with millisecond buckets [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
   - Create Prometheus Gauge for `http_requests_in_flight` with no labels
