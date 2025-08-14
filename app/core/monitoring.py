@@ -6,6 +6,7 @@ to ensure metrics appear in monitoring infrastructure regardless of collection m
 """
 
 import logging
+import re
 import time
 from typing import Dict, Any, Optional, Union, Callable
 
@@ -525,19 +526,466 @@ class EnhancedHTTPMetricsMiddleware:
         """
         Extract route pattern from request path to prevent high cardinality.
         
-        This is a basic implementation that will be enhanced in later tasks.
-        For now, it returns the path as-is but will be replaced with
-        proper pattern extraction logic.
+        Converts actual URLs to parameterized route patterns specific to the
+        security service API structure. This prevents metric cardinality explosion
+        by replacing dynamic path segments (like IDs) with parameter placeholders.
         
         Args:
             path: Original request path
             
         Returns:
-            Route pattern (currently just the original path)
+            Route pattern with parameterized dynamic segments
         """
-        # TODO: This will be implemented in task 6
-        # For now, return the path as-is to prevent breaking the middleware
-        return path
+        try:
+            # Handle empty or root paths
+            if not path or path == "/":
+                return "/"
+            
+            # Remove trailing slash for consistent processing
+            normalized_path = path.rstrip("/")
+            if not normalized_path:
+                return "/"
+            
+            # Security service specific routing patterns
+            if normalized_path.startswith("/api/v1/securities"):
+                return self._extract_securities_v1_pattern(normalized_path)
+            elif normalized_path.startswith("/api/v2/securities"):
+                return self._extract_securities_v2_pattern(normalized_path)
+            elif normalized_path.startswith("/health"):
+                return self._extract_health_pattern(normalized_path)
+            elif normalized_path == "/metrics":
+                return "/metrics"
+            elif normalized_path.startswith("/docs") or normalized_path.startswith("/openapi"):
+                # FastAPI documentation endpoints
+                return normalized_path
+            else:
+                # Handle unmatched routes with sanitization
+                return self._sanitize_unmatched_route(normalized_path)
+                
+        except Exception as e:
+            logger.error(
+                "Failed to extract route pattern",
+                extra={"path": path, "error": str(e), "error_type": type(e).__name__}
+            )
+            # Return sanitized version as fallback
+            return self._sanitize_unmatched_route(path)
+    
+    def _extract_securities_v1_pattern(self, path: str) -> str:
+        """
+        Extract route patterns for /api/v1/securities endpoints.
+        
+        Handles the v1 securities API patterns:
+        - /api/v1/securities -> /api/v1/securities
+        - /api/v1/securities/{id} -> /api/v1/securities/{id}
+        - /api/v1/securities/search -> /api/v1/securities/search
+        
+        Args:
+            path: Normalized path starting with /api/v1/securities
+            
+        Returns:
+            Route pattern for v1 securities endpoints
+        """
+        try:
+            parts = path.split("/")
+            
+            # /api/v1/securities (base endpoint)
+            if len(parts) == 4:  # ['', 'api', 'v1', 'securities']
+                return "/api/v1/securities"
+            
+            # /api/v1/securities/something
+            elif len(parts) == 5:
+                segment = parts[4]
+                
+                # Known static endpoints
+                if segment in ["search", "types", "categories"]:
+                    return f"/api/v1/securities/{segment}"
+                
+                # Dynamic ID endpoint
+                elif self._looks_like_id(segment):
+                    return "/api/v1/securities/{id}"
+                
+                # Unknown segment - treat as ID for safety
+                else:
+                    return "/api/v1/securities/{id}"
+            
+            # /api/v1/securities/{id}/something (nested resources)
+            elif len(parts) == 6:
+                id_segment = parts[4]
+                resource_segment = parts[5]
+                
+                # Verify the middle segment looks like an ID
+                if self._looks_like_id(id_segment):
+                    # Known nested resources
+                    if resource_segment in ["details", "history", "transactions"]:
+                        return f"/api/v1/securities/{{id}}/{resource_segment}"
+                    else:
+                        return f"/api/v1/securities/{{id}}/{resource_segment}"
+                else:
+                    # Fallback for unexpected structure
+                    return "/api/v1/securities/unknown"
+            
+            # Longer paths - likely nested resources
+            elif len(parts) > 6:
+                # Check if second segment looks like ID
+                if len(parts) > 4 and self._looks_like_id(parts[4]):
+                    # Build pattern with ID parameterization
+                    pattern_parts = ["/api/v1/securities/{id}"]
+                    pattern_parts.extend(parts[5:])
+                    return "/".join(pattern_parts)
+                else:
+                    return "/api/v1/securities/unknown"
+            
+            # Fallback for unexpected structures
+            else:
+                return "/api/v1/securities/unknown"
+                
+        except Exception as e:
+            logger.error(
+                "Failed to extract v1 securities pattern",
+                extra={"path": path, "error": str(e), "error_type": type(e).__name__}
+            )
+            return "/api/v1/securities/unknown"
+    
+    def _extract_securities_v2_pattern(self, path: str) -> str:
+        """
+        Extract route patterns for /api/v2/securities endpoints.
+        
+        Handles the v2 securities API patterns:
+        - /api/v2/securities/search -> /api/v2/securities/search
+        - /api/v2/securities/{id}/details -> /api/v2/securities/{id}/details
+        - /api/v2/securities/{id} -> /api/v2/securities/{id}
+        
+        Args:
+            path: Normalized path starting with /api/v2/securities
+            
+        Returns:
+            Route pattern for v2 securities endpoints
+        """
+        try:
+            parts = path.split("/")
+            
+            # /api/v2/securities (base endpoint)
+            if len(parts) == 4:  # ['', 'api', 'v2', 'securities']
+                return "/api/v2/securities"
+            
+            # /api/v2/securities/something
+            elif len(parts) == 5:
+                segment = parts[4]
+                
+                # Known static endpoints
+                if segment in ["search", "advanced-search", "bulk", "export"]:
+                    return f"/api/v2/securities/{segment}"
+                
+                # Dynamic ID endpoint
+                elif self._looks_like_id(segment):
+                    return "/api/v2/securities/{id}"
+                
+                # Unknown segment - treat as static endpoint
+                else:
+                    return f"/api/v2/securities/{segment}"
+            
+            # /api/v2/securities/{id}/something (nested resources)
+            elif len(parts) == 6:
+                id_segment = parts[4]
+                resource_segment = parts[5]
+                
+                # Verify the middle segment looks like an ID
+                if self._looks_like_id(id_segment):
+                    # Known nested resources
+                    if resource_segment in ["details", "summary", "analytics", "related"]:
+                        return f"/api/v2/securities/{{id}}/{resource_segment}"
+                    else:
+                        return f"/api/v2/securities/{{id}}/{resource_segment}"
+                else:
+                    # Static endpoint with sub-resource
+                    return f"/api/v2/securities/{id_segment}/{resource_segment}"
+            
+            # Longer paths - handle nested resources
+            elif len(parts) > 6:
+                # Check if second segment looks like ID
+                if len(parts) > 4 and self._looks_like_id(parts[4]):
+                    # Build pattern with ID parameterization
+                    pattern_parts = ["/api/v2/securities/{id}"]
+                    pattern_parts.extend(parts[5:])
+                    return "/".join(pattern_parts)
+                else:
+                    # Static nested endpoint
+                    pattern_parts = ["/api/v2/securities"]
+                    pattern_parts.extend(parts[4:])
+                    return "/".join(pattern_parts)
+            
+            # Fallback for unexpected structures
+            else:
+                return "/api/v2/securities/unknown"
+                
+        except Exception as e:
+            logger.error(
+                "Failed to extract v2 securities pattern",
+                extra={"path": path, "error": str(e), "error_type": type(e).__name__}
+            )
+            return "/api/v2/securities/unknown"
+    
+    def _extract_health_pattern(self, path: str) -> str:
+        """
+        Extract route patterns for /health endpoints.
+        
+        Handles health check patterns:
+        - /health -> /health
+        - /health/live -> /health/{check_type}
+        - /health/ready -> /health/{check_type}
+        - /health/metrics -> /health/{check_type}
+        
+        Args:
+            path: Normalized path starting with /health
+            
+        Returns:
+            Route pattern for health endpoints
+        """
+        try:
+            parts = path.split("/")
+            
+            # /health (base health endpoint)
+            if len(parts) == 2:  # ['', 'health']
+                return "/health"
+            
+            # /health/something
+            elif len(parts) == 3:
+                check_type = parts[2]
+                
+                # Known health check types
+                if check_type in ["live", "ready", "startup", "metrics", "status"]:
+                    return "/health/{check_type}"
+                
+                # Unknown health check type - still parameterize
+                else:
+                    return "/health/{check_type}"
+            
+            # Longer health paths (unusual but handle gracefully)
+            elif len(parts) > 3:
+                # Parameterize the first sub-path and keep the rest
+                pattern_parts = ["/health/{check_type}"]
+                pattern_parts.extend(parts[3:])
+                return "/".join(pattern_parts)
+            
+            # Fallback
+            else:
+                return "/health/unknown"
+                
+        except Exception as e:
+            logger.error(
+                "Failed to extract health pattern",
+                extra={"path": path, "error": str(e), "error_type": type(e).__name__}
+            )
+            return "/health/unknown"
+    
+    def _sanitize_unmatched_route(self, path: str) -> str:
+        """
+        Sanitize unmatched routes with ID detection and parameterization.
+        
+        This method handles routes that don't match known patterns by:
+        1. Detecting segments that look like IDs and parameterizing them
+        2. Limiting path depth to prevent unbounded cardinality
+        3. Sanitizing potentially problematic characters
+        
+        Args:
+            path: Original path that didn't match known patterns
+            
+        Returns:
+            Sanitized route pattern with ID parameterization
+        """
+        try:
+            # Handle empty or problematic paths
+            if not path:
+                return "/unknown"
+            
+            # Remove query parameters and fragments
+            clean_path = path.split("?")[0].split("#")[0]
+            
+            # Remove trailing slash for consistent processing
+            clean_path = clean_path.rstrip("/")
+            if not clean_path:
+                return "/"
+            
+            parts = clean_path.split("/")
+            
+            # Limit path depth to prevent cardinality explosion (max 5 segments)
+            if len(parts) > 6:  # [''] + 5 actual segments
+                parts = parts[:6]
+                logger.debug(
+                    "Truncated long path to prevent high cardinality",
+                    extra={"original_path": path, "truncated_parts": len(parts)}
+                )
+            
+            # Process each path segment
+            sanitized_parts = []
+            for i, part in enumerate(parts):
+                if i == 0:  # Skip empty first part from leading slash
+                    sanitized_parts.append(part)
+                    continue
+                
+                # Check if this segment looks like an ID
+                if self._looks_like_id(part):
+                    # Parameterize based on context or position
+                    if i > 1 and "user" in parts[i-1].lower():
+                        sanitized_parts.append("{user_id}")
+                    elif i > 1 and "account" in parts[i-1].lower():
+                        sanitized_parts.append("{account_id}")
+                    else:
+                        sanitized_parts.append("{id}")
+                else:
+                    # Keep non-ID segments but sanitize them
+                    sanitized_part = self._sanitize_path_segment(part)
+                    sanitized_parts.append(sanitized_part)
+            
+            result = "/".join(sanitized_parts)
+            
+            # Ensure we don't return empty string
+            if not result or result == "/":
+                return "/"
+            
+            return result
+            
+        except Exception as e:
+            logger.error(
+                "Failed to sanitize unmatched route",
+                extra={"path": path, "error": str(e), "error_type": type(e).__name__}
+            )
+            return "/unknown"
+    
+    def _looks_like_id(self, segment: str) -> bool:
+        """
+        Determine if a path segment looks like an identifier.
+        
+        Detects various ID formats commonly used in APIs:
+        - MongoDB ObjectIds (24 hex characters)
+        - UUIDs (with or without hyphens)
+        - Numeric IDs
+        - Short alphanumeric codes
+        
+        Args:
+            segment: Path segment to analyze
+            
+        Returns:
+            True if segment appears to be an identifier
+        """
+        try:
+            if not segment or len(segment) < 2:
+                return False
+            
+            # Common non-ID words that should never be treated as IDs
+            common_words = {
+                'accounts', 'users', 'settings', 'profile', 'details', 'history',
+                'search', 'advanced-search', 'bulk', 'export', 'summary', 'analytics',
+                'related', 'live', 'ready', 'startup', 'metrics', 'status', 'health',
+                'api', 'docs', 'openapi', 'swagger', 'admin', 'public', 'private',
+                'create', 'update', 'delete', 'list', 'view', 'edit', 'new'
+            }
+            
+            if segment.lower() in common_words:
+                return False
+            
+            # MongoDB ObjectId pattern (24 hex characters)
+            if len(segment) == 24 and all(c in "0123456789abcdefABCDEF" for c in segment):
+                return True
+            
+            # UUID patterns (with or without hyphens)
+            if len(segment) == 36 and segment.count("-") == 4:
+                # Standard UUID format: 8-4-4-4-12
+                uuid_parts = segment.split("-")
+                if (len(uuid_parts) == 5 and 
+                    len(uuid_parts[0]) == 8 and len(uuid_parts[1]) == 4 and 
+                    len(uuid_parts[2]) == 4 and len(uuid_parts[3]) == 4 and 
+                    len(uuid_parts[4]) == 12):
+                    return all(all(c in "0123456789abcdefABCDEF" for c in part) for part in uuid_parts)
+            
+            # UUID without hyphens (32 hex characters)
+            if len(segment) == 32 and all(c in "0123456789abcdefABCDEF" for c in segment):
+                return True
+            
+            # Numeric IDs (integers) - but not single digits which are often version numbers
+            if segment.isdigit() and len(segment) >= 2:
+                return True
+            
+            # Single digit numbers could be version numbers, so be more careful
+            if segment.isdigit() and len(segment) == 1:
+                return False
+            
+            # Short alphanumeric codes (likely IDs if 8-20 chars and mixed case/numbers)
+            # Made more restrictive to avoid false positives
+            if (8 <= len(segment) <= 20 and 
+                segment.isalnum() and 
+                any(c.isdigit() for c in segment) and 
+                any(c.isalpha() for c in segment) and
+                not segment.lower() in common_words):
+                return True
+            
+            # Base64-like patterns (common in some ID schemes) - more restrictive
+            if (len(segment) >= 12 and len(segment) <= 32 and
+                all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=" for c in segment)):
+                # Must have some variety in characters to be considered base64
+                unique_chars = set(segment.replace("=", ""))
+                if len(unique_chars) >= 4:  # At least 4 different characters
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(
+                "Error in ID detection",
+                extra={"segment": segment, "error": str(e), "error_type": type(e).__name__}
+            )
+            # When in doubt, assume it's not an ID to avoid over-parameterization
+            return False
+    
+    def _sanitize_path_segment(self, segment: str) -> str:
+        """
+        Sanitize a path segment to prevent problematic characters in metrics.
+        
+        Removes or replaces characters that could cause issues in metric labels
+        while preserving the essential meaning of the path segment.
+        
+        Args:
+            segment: Path segment to sanitize
+            
+        Returns:
+            Sanitized path segment
+        """
+        try:
+            if not segment:
+                return "empty"
+            
+            # Replace problematic characters with safe alternatives
+            # Keep alphanumeric, hyphens, underscores, and dots
+            sanitized = ""
+            for char in segment:
+                if char.isalnum() or char in "-_.":
+                    sanitized += char
+                elif char in " \t":
+                    sanitized += "_"
+                else:
+                    # Skip other problematic characters
+                    continue
+            
+            # Ensure we don't return empty string
+            if not sanitized:
+                return "unknown"
+            
+            # Limit length to prevent extremely long segments
+            if len(sanitized) > 50:
+                sanitized = sanitized[:47] + "..."
+                logger.debug(
+                    "Truncated long path segment",
+                    extra={"original": segment, "truncated": sanitized}
+                )
+            
+            return sanitized
+            
+        except Exception as e:
+            logger.error(
+                "Failed to sanitize path segment",
+                extra={"segment": segment, "error": str(e), "error_type": type(e).__name__}
+            )
+            return "unknown"
     
     def _get_method_label(self, method: str) -> str:
         """
