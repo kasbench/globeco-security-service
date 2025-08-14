@@ -69,7 +69,7 @@
   - Call setup_monitoring() function during application initialization
   - _Requirements: 2.1, 5.1, 5.4, 6.1_
 
-- [ ] 11. Add configuration settings
+- [x] 11. Add configuration settings
   - Update `src/config.py` to include enable_metrics boolean setting
   - Set default value to True for metrics collection
   - Add environment variable support for ENABLE_METRICS
