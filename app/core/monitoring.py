@@ -319,47 +319,92 @@ class EnhancedHTTPMetricsMiddleware:
     
     def _increment_in_flight(self) -> None:
         """
-        Increment the in-flight requests counter.
+        Increment the in-flight requests counter for both metrics systems.
         
         Uses comprehensive error handling to ensure request processing
-        continues even if metrics recording fails.
+        continues even if metrics recording fails. Records identical values
+        to both Prometheus and OpenTelemetry systems.
         """
+        prometheus_success = False
+        opentelemetry_success = False
+        
+        # Increment Prometheus in-flight gauge
         try:
             HTTP_REQUESTS_IN_FLIGHT.inc()
-            logger.debug("Incremented in-flight requests counter")
+            logger.debug("Prometheus in-flight counter incremented successfully")
+            prometheus_success = True
         except Exception as e:
-            logger.error(f"Failed to increment Prometheus in-flight counter: {e}")
+            logger.error(
+                "Failed to increment Prometheus in-flight counter",
+                extra={"error": str(e), "error_type": type(e).__name__, "operation": "increment"}
+            )
         
+        # Increment OpenTelemetry in-flight counter
         try:
             if otel_http_requests_in_flight:
                 otel_http_requests_in_flight.add(1)
-                logger.debug("Incremented OpenTelemetry in-flight requests counter")
+                logger.debug("OpenTelemetry in-flight counter incremented successfully")
+                opentelemetry_success = True
+            else:
+                logger.debug("OpenTelemetry in-flight counter not available (using dummy metric)")
+                opentelemetry_success = True  # Consider dummy metrics as "successful"
         except Exception as e:
-            logger.error(f"Failed to increment OpenTelemetry in-flight counter: {e}")
+            logger.error(
+                "Failed to increment OpenTelemetry in-flight counter",
+                extra={"error": str(e), "error_type": type(e).__name__, "operation": "increment"}
+            )
+        
+        # Log overall operation status
+        if not (prometheus_success or opentelemetry_success):
+            logger.error("All in-flight counter increment operations failed")
     
     def _decrement_in_flight(self) -> None:
         """
-        Decrement the in-flight requests counter.
+        Decrement the in-flight requests counter for both metrics systems.
         
         Uses comprehensive error handling to ensure request processing
-        continues even if metrics recording fails.
+        continues even if metrics recording fails. Records identical values
+        to both Prometheus and OpenTelemetry systems.
         """
+        prometheus_success = False
+        opentelemetry_success = False
+        
+        # Decrement Prometheus in-flight gauge
         try:
             HTTP_REQUESTS_IN_FLIGHT.dec()
-            logger.debug("Decremented in-flight requests counter")
+            logger.debug("Prometheus in-flight counter decremented successfully")
+            prometheus_success = True
         except Exception as e:
-            logger.error(f"Failed to decrement Prometheus in-flight counter: {e}")
+            logger.error(
+                "Failed to decrement Prometheus in-flight counter",
+                extra={"error": str(e), "error_type": type(e).__name__, "operation": "decrement"}
+            )
         
+        # Decrement OpenTelemetry in-flight counter
         try:
             if otel_http_requests_in_flight:
                 otel_http_requests_in_flight.add(-1)
-                logger.debug("Decremented OpenTelemetry in-flight requests counter")
+                logger.debug("OpenTelemetry in-flight counter decremented successfully")
+                opentelemetry_success = True
+            else:
+                logger.debug("OpenTelemetry in-flight counter not available (using dummy metric)")
+                opentelemetry_success = True  # Consider dummy metrics as "successful"
         except Exception as e:
-            logger.error(f"Failed to decrement OpenTelemetry in-flight counter: {e}")
+            logger.error(
+                "Failed to decrement OpenTelemetry in-flight counter",
+                extra={"error": str(e), "error_type": type(e).__name__, "operation": "decrement"}
+            )
+        
+        # Log overall operation status
+        if not (prometheus_success or opentelemetry_success):
+            logger.error("All in-flight counter decrement operations failed")
     
     def _record_metrics(self, method: str, path: str, status: str, duration_ms: float) -> None:
         """
         Record HTTP metrics to both Prometheus and OpenTelemetry systems.
+        
+        This method ensures identical metric values are recorded to both systems
+        with independent error handling to maintain system reliability.
         
         Args:
             method: HTTP method (GET, POST, etc.)
@@ -370,26 +415,47 @@ class EnhancedHTTPMetricsMiddleware:
         # Normalize method to uppercase
         method_label = self._get_method_label(method)
         
+        # Create structured logging context
+        log_context = {
+            "method": method_label,
+            "path": path,
+            "status": status,
+            "duration_ms": round(duration_ms, 2)
+        }
+        
+        # Track recording success for both systems
+        prometheus_success = False
+        opentelemetry_success = False
+        
         # Record Prometheus metrics with individual error handling
+        # Counter metric
         try:
             HTTP_REQUESTS_TOTAL.labels(
                 method=method_label,
                 path=path,
                 status=status
             ).inc()
-            logger.debug(f"Recorded Prometheus request counter: {method_label} {path} {status}")
+            logger.debug("Prometheus request counter recorded successfully", extra=log_context)
         except Exception as e:
-            logger.error(f"Failed to record Prometheus request counter: {e}")
+            logger.error(
+                "Failed to record Prometheus request counter",
+                extra={**log_context, "error": str(e), "error_type": type(e).__name__}
+            )
         
+        # Histogram metric
         try:
             HTTP_REQUEST_DURATION.labels(
                 method=method_label,
                 path=path,
                 status=status
             ).observe(duration_ms)
-            logger.debug(f"Recorded Prometheus request duration: {duration_ms}ms")
+            logger.debug("Prometheus request duration recorded successfully", extra=log_context)
+            prometheus_success = True
         except Exception as e:
-            logger.error(f"Failed to record Prometheus request duration: {e}")
+            logger.error(
+                "Failed to record Prometheus request duration",
+                extra={**log_context, "error": str(e), "error_type": type(e).__name__}
+            )
         
         # Record OpenTelemetry metrics with individual error handling
         attributes = {
@@ -398,23 +464,62 @@ class EnhancedHTTPMetricsMiddleware:
             "status": status
         }
         
+        # Counter metric
         try:
             if otel_http_requests_total:
                 otel_http_requests_total.add(1, attributes=attributes)
-                logger.debug(f"Recorded OpenTelemetry request counter: {method_label} {path} {status}")
+                logger.debug("OpenTelemetry request counter recorded successfully", extra=log_context)
+            else:
+                logger.debug("OpenTelemetry request counter not available (using dummy metric)", extra=log_context)
         except Exception as e:
-            logger.error(f"Failed to record OpenTelemetry request counter: {e}")
+            logger.error(
+                "Failed to record OpenTelemetry request counter",
+                extra={**log_context, "error": str(e), "error_type": type(e).__name__}
+            )
         
+        # Histogram metric
         try:
             if otel_http_request_duration:
                 otel_http_request_duration.record(duration_ms, attributes=attributes)
-                logger.debug(f"Recorded OpenTelemetry request duration: {duration_ms}ms")
+                logger.debug("OpenTelemetry request duration recorded successfully", extra=log_context)
+                opentelemetry_success = True
+            else:
+                logger.debug("OpenTelemetry request duration not available (using dummy metric)", extra=log_context)
+                opentelemetry_success = True  # Consider dummy metrics as "successful" to avoid false alarms
         except Exception as e:
-            logger.error(f"Failed to record OpenTelemetry request duration: {e}")
+            logger.error(
+                "Failed to record OpenTelemetry request duration",
+                extra={**log_context, "error": str(e), "error_type": type(e).__name__}
+            )
         
-        # Log slow requests
+        # Log overall recording status
+        if prometheus_success and opentelemetry_success:
+            logger.debug("Dual metrics recording completed successfully", extra=log_context)
+        elif prometheus_success or opentelemetry_success:
+            logger.warning(
+                "Partial metrics recording success",
+                extra={
+                    **log_context,
+                    "prometheus_success": prometheus_success,
+                    "opentelemetry_success": opentelemetry_success
+                }
+            )
+        else:
+            logger.error(
+                "All metrics recording failed",
+                extra={
+                    **log_context,
+                    "prometheus_success": prometheus_success,
+                    "opentelemetry_success": opentelemetry_success
+                }
+            )
+        
+        # Log slow requests with structured context
         if duration_ms > 1000:
-            logger.warning(f"Slow request detected: {method_label} {path} took {duration_ms:.2f}ms")
+            logger.warning(
+                "Slow request detected",
+                extra={**log_context, "threshold_ms": 1000}
+            )
     
     def _extract_route_pattern(self, path: str) -> str:
         """
