@@ -7,7 +7,7 @@ to ensure metrics appear in monitoring infrastructure regardless of collection m
 
 import logging
 import time
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Callable
 
 # Prometheus imports
 from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, REGISTRY
@@ -220,3 +220,232 @@ def reset_metrics_registry() -> None:
     global _METRICS_REGISTRY
     _METRICS_REGISTRY.clear()
     logger.warning("Metrics registry has been reset")
+
+
+class EnhancedHTTPMetricsMiddleware:
+    """
+    FastAPI middleware for collecting standardized HTTP metrics.
+    
+    This middleware collects three core metrics for all HTTP requests:
+    1. http_requests_total - Counter of total requests
+    2. http_request_duration - Histogram of request durations
+    3. http_requests_in_flight - Gauge of concurrent requests
+    
+    Metrics are recorded to both Prometheus and OpenTelemetry systems
+    to ensure visibility regardless of collection method.
+    """
+    
+    def __init__(self, app):
+        """
+        Initialize the middleware.
+        
+        Args:
+            app: FastAPI application instance
+        """
+        self.app = app
+        logger.info("EnhancedHTTPMetricsMiddleware initialized")
+    
+    async def __call__(self, scope, receive, send):
+        """
+        ASGI middleware implementation.
+        
+        Args:
+            scope: ASGI scope
+            receive: ASGI receive callable
+            send: ASGI send callable
+        """
+        if scope["type"] != "http":
+            # Only process HTTP requests
+            await self.app(scope, receive, send)
+            return
+        
+        # Extract request information
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+        
+        # High-precision timing
+        start_time = time.perf_counter()
+        
+        # Track in-flight requests
+        in_flight_incremented = False
+        
+        try:
+            # Increment in-flight counter
+            self._increment_in_flight()
+            in_flight_incremented = True
+            
+            # Process the request
+            status_code = 500  # Default to 500 in case of unhandled exceptions
+            
+            async def send_wrapper(message):
+                nonlocal status_code
+                if message["type"] == "http.response.start":
+                    status_code = message.get("status", 500)
+                await send(message)
+            
+            # Call the next middleware/application
+            await self.app(scope, receive, send_wrapper)
+            
+        except Exception as e:
+            # Log the exception but don't re-raise to avoid breaking request processing
+            logger.error(f"Exception during request processing: {e}", exc_info=True)
+            status_code = 500
+            
+            # Send error response if not already sent
+            try:
+                await send({
+                    "type": "http.response.start",
+                    "status": 500,
+                    "headers": [[b"content-type", b"application/json"]],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b'{"error": "Internal server error"}',
+                })
+            except Exception as send_error:
+                logger.error(f"Failed to send error response: {send_error}")
+            
+        finally:
+            # Always decrement in-flight counter if it was incremented
+            if in_flight_incremented:
+                self._decrement_in_flight()
+            
+            # Calculate duration
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            
+            # Extract route pattern and record metrics
+            path_pattern = self._extract_route_pattern(path)
+            self._record_metrics(method, path_pattern, str(status_code), duration_ms)
+    
+    def _increment_in_flight(self) -> None:
+        """
+        Increment the in-flight requests counter.
+        
+        Uses comprehensive error handling to ensure request processing
+        continues even if metrics recording fails.
+        """
+        try:
+            HTTP_REQUESTS_IN_FLIGHT.inc()
+            logger.debug("Incremented in-flight requests counter")
+        except Exception as e:
+            logger.error(f"Failed to increment Prometheus in-flight counter: {e}")
+        
+        try:
+            if otel_http_requests_in_flight:
+                otel_http_requests_in_flight.add(1)
+                logger.debug("Incremented OpenTelemetry in-flight requests counter")
+        except Exception as e:
+            logger.error(f"Failed to increment OpenTelemetry in-flight counter: {e}")
+    
+    def _decrement_in_flight(self) -> None:
+        """
+        Decrement the in-flight requests counter.
+        
+        Uses comprehensive error handling to ensure request processing
+        continues even if metrics recording fails.
+        """
+        try:
+            HTTP_REQUESTS_IN_FLIGHT.dec()
+            logger.debug("Decremented in-flight requests counter")
+        except Exception as e:
+            logger.error(f"Failed to decrement Prometheus in-flight counter: {e}")
+        
+        try:
+            if otel_http_requests_in_flight:
+                otel_http_requests_in_flight.add(-1)
+                logger.debug("Decremented OpenTelemetry in-flight requests counter")
+        except Exception as e:
+            logger.error(f"Failed to decrement OpenTelemetry in-flight counter: {e}")
+    
+    def _record_metrics(self, method: str, path: str, status: str, duration_ms: float) -> None:
+        """
+        Record HTTP metrics to both Prometheus and OpenTelemetry systems.
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            path: Route pattern (e.g., /api/v1/securities/{id})
+            status: HTTP status code as string
+            duration_ms: Request duration in milliseconds
+        """
+        # Normalize method to uppercase
+        method_label = self._get_method_label(method)
+        
+        # Record Prometheus metrics with individual error handling
+        try:
+            HTTP_REQUESTS_TOTAL.labels(
+                method=method_label,
+                path=path,
+                status=status
+            ).inc()
+            logger.debug(f"Recorded Prometheus request counter: {method_label} {path} {status}")
+        except Exception as e:
+            logger.error(f"Failed to record Prometheus request counter: {e}")
+        
+        try:
+            HTTP_REQUEST_DURATION.labels(
+                method=method_label,
+                path=path,
+                status=status
+            ).observe(duration_ms)
+            logger.debug(f"Recorded Prometheus request duration: {duration_ms}ms")
+        except Exception as e:
+            logger.error(f"Failed to record Prometheus request duration: {e}")
+        
+        # Record OpenTelemetry metrics with individual error handling
+        attributes = {
+            "method": method_label,
+            "path": path,
+            "status": status
+        }
+        
+        try:
+            if otel_http_requests_total:
+                otel_http_requests_total.add(1, attributes=attributes)
+                logger.debug(f"Recorded OpenTelemetry request counter: {method_label} {path} {status}")
+        except Exception as e:
+            logger.error(f"Failed to record OpenTelemetry request counter: {e}")
+        
+        try:
+            if otel_http_request_duration:
+                otel_http_request_duration.record(duration_ms, attributes=attributes)
+                logger.debug(f"Recorded OpenTelemetry request duration: {duration_ms}ms")
+        except Exception as e:
+            logger.error(f"Failed to record OpenTelemetry request duration: {e}")
+        
+        # Log slow requests
+        if duration_ms > 1000:
+            logger.warning(f"Slow request detected: {method_label} {path} took {duration_ms:.2f}ms")
+    
+    def _extract_route_pattern(self, path: str) -> str:
+        """
+        Extract route pattern from request path to prevent high cardinality.
+        
+        This is a basic implementation that will be enhanced in later tasks.
+        For now, it returns the path as-is but will be replaced with
+        proper pattern extraction logic.
+        
+        Args:
+            path: Original request path
+            
+        Returns:
+            Route pattern (currently just the original path)
+        """
+        # TODO: This will be implemented in task 6
+        # For now, return the path as-is to prevent breaking the middleware
+        return path
+    
+    def _get_method_label(self, method: str) -> str:
+        """
+        Convert HTTP method to uppercase string for consistent labeling.
+        
+        Args:
+            method: HTTP method string
+            
+        Returns:
+            Uppercase method string
+        """
+        try:
+            return method.upper() if method else "UNKNOWN"
+        except Exception as e:
+            logger.error(f"Failed to format method label: {e}")
+            return "UNKNOWN"
