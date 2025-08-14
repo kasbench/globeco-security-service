@@ -1138,3 +1138,287 @@ class EnhancedHTTPMetricsMiddleware:
                 }
             )
             return "500"
+
+def setup_monitoring(app):
+    """
+    Setup monitoring and observability for the FastAPI application.
+    
+    This function configures additional monitoring components that complement
+    the EnhancedHTTPMetricsMiddleware. It attempts to use prometheus-fastapi-instrumentator
+    if available, but provides graceful fallback if not installed.
+    
+    Args:
+        app: FastAPI application instance
+        
+    Returns:
+        Configured instrumentator instance if available, None otherwise
+    """
+    try:
+        # Try to import prometheus-fastapi-instrumentator
+        from prometheus_fastapi_instrumentator import Instrumentator, metrics
+        
+        logger.info("Setting up prometheus-fastapi-instrumentator")
+        
+        # Create instrumentator with minimal conflicting metrics
+        # We disable most default metrics to avoid conflicts with our custom middleware
+        instrumentator = Instrumentator(
+            should_group_status_codes=False,  # We handle status codes in our middleware
+            should_ignore_untemplated=True,   # Ignore untemplated routes to reduce cardinality
+            should_respect_env_var=True,      # Respect ENABLE_METRICS env var
+            should_instrument_requests_inprogress=False,  # We handle in-flight in our middleware
+            should_instrument_requests_size=True,         # This doesn't conflict
+            should_instrument_responses_size=True,        # This doesn't conflict
+            excluded_handlers=["/metrics"],   # Don't instrument the metrics endpoint itself
+            env_var_name="ENABLE_METRICS",   # Environment variable to control instrumentation
+            inprogress_name="http_requests_inprogress_instrumentator",  # Different name to avoid conflict
+            inprogress_labels=True
+        )
+        
+        # Add only non-conflicting metrics that complement our custom middleware
+        # These provide additional insights without duplicating our core metrics
+        try:
+            # Request/response size metrics (these don't conflict with our middleware)
+            instrumentator.add(metrics.combined_size())
+            logger.debug("Added combined size metrics to instrumentator")
+        except Exception as e:
+            logger.warning(f"Failed to add combined size metrics: {e}")
+        
+        try:
+            # Add custom metric for tracking instrumentator health
+            instrumentator.add(
+                metrics.default(
+                    metric_name="instrumentator_requests_total",
+                    metric_doc="Total requests tracked by instrumentator (for validation)",
+                    metric_namespace="",
+                    metric_subsystem=""
+                )
+            )
+            logger.debug("Added instrumentator validation metrics")
+        except Exception as e:
+            logger.warning(f"Failed to add instrumentator validation metrics: {e}")
+        
+        # Instrument the app
+        instrumentator.instrument(app)
+        logger.info("FastAPI instrumentator setup complete")
+        
+        return instrumentator
+        
+    except ImportError:
+        logger.info(
+            "prometheus-fastapi-instrumentator not available, "
+            "using only custom EnhancedHTTPMetricsMiddleware"
+        )
+        return None
+        
+    except Exception as e:
+        logger.error(
+            "Failed to setup prometheus-fastapi-instrumentator",
+            extra={"error": str(e), "error_type": type(e).__name__}
+        )
+        return None
+
+
+def get_monitoring_status() -> Dict[str, Any]:
+    """
+    Get the current status of the monitoring system.
+    
+    Returns comprehensive information about the monitoring setup including
+    metrics registry status, OpenTelemetry availability, and instrumentator status.
+    
+    Returns:
+        Dictionary containing monitoring system status information
+    """
+    try:
+        status = {
+            "enhanced_middleware_available": True,
+            "metrics_registry_info": get_metrics_registry_info(),
+            "opentelemetry_available": OTEL_AVAILABLE,
+            "opentelemetry_meter_initialized": otel_meter is not None,
+            "prometheus_metrics_available": True,
+            "timestamp": time.time()
+        }
+        
+        # Check if instrumentator is available
+        try:
+            from prometheus_fastapi_instrumentator import Instrumentator
+            status["instrumentator_available"] = True
+        except ImportError:
+            status["instrumentator_available"] = False
+        
+        # Check metrics health
+        try:
+            # Test if we can create a simple metric
+            test_counter = _get_or_create_metric(
+                Counter,
+                'monitoring_health_check',
+                'Health check counter for monitoring system'
+            )
+            test_counter.inc(0)  # Increment by 0 to test functionality
+            status["metrics_creation_healthy"] = True
+        except Exception as e:
+            status["metrics_creation_healthy"] = False
+            status["metrics_creation_error"] = str(e)
+        
+        # Check OpenTelemetry health
+        if otel_meter:
+            try:
+                # Test OpenTelemetry metric creation
+                test_otel_counter = otel_meter.create_counter(
+                    name="monitoring_health_check_otel",
+                    description="Health check counter for OpenTelemetry"
+                )
+                test_otel_counter.add(0)  # Add 0 to test functionality
+                status["opentelemetry_healthy"] = True
+            except Exception as e:
+                status["opentelemetry_healthy"] = False
+                status["opentelemetry_error"] = str(e)
+        else:
+            status["opentelemetry_healthy"] = False
+            status["opentelemetry_error"] = "OpenTelemetry meter not initialized"
+        
+        return status
+        
+    except Exception as e:
+        logger.error(
+            "Failed to get monitoring status",
+            extra={"error": str(e), "error_type": type(e).__name__}
+        )
+        return {
+            "enhanced_middleware_available": False,
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+
+def configure_metrics_endpoint(app, path: str = "/metrics"):
+    """
+    Configure the Prometheus metrics endpoint for the FastAPI application.
+    
+    This function adds a /metrics endpoint that exposes Prometheus metrics
+    in the standard format. It uses the prometheus_client's make_asgi_app()
+    to create a proper ASGI application for serving metrics.
+    
+    Args:
+        app: FastAPI application instance
+        path: Path where metrics endpoint should be mounted (default: "/metrics")
+    """
+    try:
+        from prometheus_client import make_asgi_app
+        
+        # Create Prometheus ASGI app
+        metrics_app = make_asgi_app()
+        
+        # Mount the metrics app at the specified path
+        app.mount(path, metrics_app)
+        
+        logger.info(f"Prometheus metrics endpoint configured at {path}")
+        
+    except ImportError as e:
+        logger.error(
+            "Failed to configure metrics endpoint: prometheus_client not available",
+            extra={"error": str(e)}
+        )
+        raise
+        
+    except Exception as e:
+        logger.error(
+            "Failed to configure metrics endpoint",
+            extra={"error": str(e), "error_type": type(e).__name__, "path": path}
+        )
+        raise
+
+
+def validate_monitoring_setup(app) -> Dict[str, Any]:
+    """
+    Validate that the monitoring setup is working correctly.
+    
+    This function performs comprehensive validation of the monitoring system
+    including middleware registration, metrics creation, and endpoint availability.
+    
+    Args:
+        app: FastAPI application instance
+        
+    Returns:
+        Dictionary containing validation results and any issues found
+    """
+    validation_results = {
+        "timestamp": time.time(),
+        "overall_status": "unknown",
+        "checks": {},
+        "issues": [],
+        "recommendations": []
+    }
+    
+    try:
+        # Check 1: Middleware registration
+        middleware_found = False
+        for middleware in app.user_middleware:
+            if hasattr(middleware, 'cls') and middleware.cls.__name__ == 'EnhancedHTTPMetricsMiddleware':
+                middleware_found = True
+                break
+        
+        validation_results["checks"]["middleware_registered"] = middleware_found
+        if not middleware_found:
+            validation_results["issues"].append("EnhancedHTTPMetricsMiddleware not found in app middleware")
+            validation_results["recommendations"].append("Add EnhancedHTTPMetricsMiddleware to your FastAPI app")
+        
+        # Check 2: Metrics registry health
+        registry_info = get_metrics_registry_info()
+        validation_results["checks"]["metrics_registry"] = registry_info
+        
+        if registry_info["prometheus_metrics_count"] == 0:
+            validation_results["issues"].append("No Prometheus metrics found in registry")
+            validation_results["recommendations"].append("Ensure HTTP metrics are being created during app startup")
+        
+        # Check 3: OpenTelemetry status
+        validation_results["checks"]["opentelemetry_status"] = {
+            "available": OTEL_AVAILABLE,
+            "meter_initialized": otel_meter is not None
+        }
+        
+        if not OTEL_AVAILABLE:
+            validation_results["recommendations"].append(
+                "Install OpenTelemetry packages for dual metrics export capability"
+            )
+        
+        # Check 4: Routes inspection
+        routes_with_metrics = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes_with_metrics.append({
+                    "path": route.path,
+                    "methods": getattr(route, 'methods', [])
+                })
+        
+        validation_results["checks"]["routes_count"] = len(routes_with_metrics)
+        validation_results["checks"]["sample_routes"] = routes_with_metrics[:5]  # First 5 routes
+        
+        # Determine overall status
+        if len(validation_results["issues"]) == 0:
+            validation_results["overall_status"] = "healthy"
+        elif middleware_found and registry_info["prometheus_metrics_count"] > 0:
+            validation_results["overall_status"] = "functional_with_warnings"
+        else:
+            validation_results["overall_status"] = "unhealthy"
+        
+        logger.info(
+            f"Monitoring validation complete: {validation_results['overall_status']}",
+            extra={
+                "issues_count": len(validation_results["issues"]),
+                "middleware_found": middleware_found,
+                "metrics_count": registry_info["prometheus_metrics_count"]
+            }
+        )
+        
+        return validation_results
+        
+    except Exception as e:
+        validation_results["overall_status"] = "error"
+        validation_results["issues"].append(f"Validation failed: {str(e)}")
+        
+        logger.error(
+            "Monitoring validation failed",
+            extra={"error": str(e), "error_type": type(e).__name__}
+        )
+        
+        return validation_results
