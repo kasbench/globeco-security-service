@@ -48,7 +48,7 @@
   - Ensure consistent labeling across both metrics systems
   - _Requirements: 3.1, 3.3, 4.2_
 
-- [ ] 8. Add ID detection and parameterization logic
+- [x] 8. Add ID detection and parameterization logic
   - Implement `_looks_like_id()` method to identify MongoDB ObjectIds, UUIDs, and numeric IDs
   - Add logic to replace detected IDs with parameterized patterns like {id}, {user_id}
   - Handle edge cases for alphanumeric identifiers and unknown ID formats

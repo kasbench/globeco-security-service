@@ -886,8 +886,12 @@ class EnhancedHTTPMetricsMiddleware:
                 return False
             
             # MongoDB ObjectId pattern (24 hex characters)
-            if len(segment) == 24 and all(c in "0123456789abcdefABCDEF" for c in segment):
-                return True
+            if len(segment) == 24:
+                if all(c in "0123456789abcdefABCDEF" for c in segment):
+                    return True
+                else:
+                    # 24 characters but not all hex - likely malformed ObjectId, not an ID
+                    return False
             
             # UUID patterns (with or without hyphens)
             if len(segment) == 36 and segment.count("-") == 4:
@@ -902,6 +906,15 @@ class EnhancedHTTPMetricsMiddleware:
             # UUID without hyphens (32 hex characters)
             if len(segment) == 32 and all(c in "0123456789abcdefABCDEF" for c in segment):
                 return True
+            
+            # Check for malformed ObjectId-like strings (close to 24 chars, mostly hex)
+            # These should NOT be treated as IDs since they're likely malformed
+            if 20 <= len(segment) <= 30:
+                hex_chars = sum(1 for c in segment if c in "0123456789abcdefABCDEF")
+                total_chars = len(segment)
+                # If it's mostly hex (>80%) but not exactly 24 or 32 chars, it's likely malformed
+                if hex_chars / total_chars > 0.8 and len(segment) not in [24, 32]:
+                    return False
             
             # Numeric IDs (integers) - but not single digits which are often version numbers
             if segment.isdigit() and len(segment) >= 2:
@@ -918,6 +931,17 @@ class EnhancedHTTPMetricsMiddleware:
                 any(c.isdigit() for c in segment) and 
                 any(c.isalpha() for c in segment) and
                 not segment.lower() in common_words):
+                # Additional check: if it looks like a malformed ObjectId/UUID (mostly hex, wrong length)
+                # we should be more careful. But normal mixed alphanumeric should still work.
+                if all(c in "0123456789abcdefABCDEF" for c in segment):
+                    # If it's all hex characters, check if it's a reasonable ID length
+                    # Allow common ID lengths but reject obvious malformed ObjectId/UUID lengths
+                    if len(segment) in [23, 25, 26, 27, 28, 29, 30, 31, 33, 34, 35]:
+                        # These lengths are suspicious for hex-only strings (close to ObjectId/UUID)
+                        return False
+                    # Other hex lengths (8-22, 24, 32) are acceptable
+                    return True
+                # For non-hex alphanumeric, apply the original logic
                 return True
             
             # Base64-like patterns (common in some ID schemes) - more restrictive
