@@ -10,6 +10,10 @@ from app.api.v2_routes import router as v2_api_router
 from app.api.health import router as health_router
 import os
 from fastapi.middleware.cors import CORSMiddleware
+# Enhanced HTTP metrics imports
+from app.core.monitoring import EnhancedHTTPMetricsMiddleware, setup_monitoring
+from prometheus_client import make_asgi_app, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
 # OpenTelemetry imports
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -47,7 +51,7 @@ metric_readers = [
     ),
     PeriodicExportingMetricReader(
         OTLPMetricExporterHTTP(
-            endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"
+            endpoint=f"http://otel-collector-collector.monitoring.svc.cluster.local:4318/v1/metrics"
         )
     )
 ]
@@ -56,6 +60,14 @@ set_meter_provider(meter_provider)
 
 # --- FastAPI app instantiation ---
 app = FastAPI(title="GlobeCo Security Service", version="1.0.0")
+
+# Setup monitoring after meter provider is initialized
+if settings.enable_metrics:
+    setup_monitoring(app)
+
+# Add Enhanced HTTP Metrics Middleware first (before other middleware)
+if settings.enable_metrics:
+    app.add_middleware(EnhancedHTTPMetricsMiddleware)
 
 # Instrument FastAPI for tracing
 FastAPIInstrumentor.instrument_app(app)
@@ -71,6 +83,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add Prometheus /metrics endpoint for debugging
+if settings.enable_metrics:
+    @app.get("/metrics")
+    async def metrics():
+        """Prometheus metrics endpoint for debugging."""
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 @app.on_event("startup")
 async def on_startup():
     client = AsyncIOMotorClient(settings.MONGODB_URI)
@@ -83,6 +102,10 @@ async def on_startup():
         await Security.get_motor_collection().create_index([("ticker", "text")])  # For text search
     except Exception as e:
         print(f"Index creation failed: {e}")  # Non-fatal for development
+    
+    # Setup monitoring and observability
+    if settings.enable_metrics:
+        setup_monitoring(app)
 
 app.include_router(api_router)
 app.include_router(v2_api_router)

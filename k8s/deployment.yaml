@@ -21,6 +21,15 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "globeco-security-service"
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: ENABLE_METRICS
+              value: "true"
           resources:
             requests:
               cpu: "200m"

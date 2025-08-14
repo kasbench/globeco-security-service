@@ -697,9 +697,14 @@ def create_app() -> FastAPI:
     if settings.enable_metrics:
         instrumentator = setup_monitoring(app)
 
-        # Mount Prometheus metrics endpoint
-        metrics_app = make_asgi_app()
-        app.mount("/metrics", metrics_app)
+        # Add Prometheus metrics endpoint (avoid mount to prevent redirects)
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        from fastapi import Response
+        
+        @app.get("/metrics")
+        async def metrics():
+            """Prometheus metrics endpoint for debugging."""
+            return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     # Add your routers here...
 
@@ -776,7 +781,44 @@ gunicorn --workers 4 src.main:app
 
 ## Common Pitfalls and Solutions
 
-### 1. **Metrics Visible in /metrics but Not in Monitoring System (CRITICAL ISSUE)**
+### 1. **Metrics Endpoint Returns 307 Redirect (NEW CRITICAL ISSUE)**
+
+**Problem**: The `/metrics` endpoint returns a 307 Temporary Redirect to `/metrics/` instead of serving metrics directly.
+
+**Cause**: Using `app.mount("/metrics", metrics_app)` creates a sub-application that expects paths with trailing slashes. FastAPI automatically redirects `/metrics` to `/metrics/`.
+
+**Impact**: 
+- Prometheus scrapers may fail to collect metrics if they don't follow redirects
+- Additional latency and unnecessary redirects
+- Metrics show redirect status (307) instead of successful collection (200)
+
+**Solution**: Replace the mounted sub-application with a proper FastAPI route:
+
+```python
+# ❌ WRONG - Causes 307 redirects
+if settings.enable_metrics:
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
+
+# ✅ CORRECT - Direct 200 response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
+
+if settings.enable_metrics:
+    @app.get("/metrics")
+    async def metrics():
+        """Prometheus metrics endpoint for debugging."""
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+```
+
+**How to Identify**: 
+- `curl -v http://your-service:8088/metrics` returns `HTTP/1.1 307 Temporary Redirect`
+- Location header points to `http://your-service:8088/metrics/`
+- Metrics are visible at `/metrics/` but not `/metrics`
+
+**Prevention**: Always use FastAPI routes instead of mounting for single endpoints.
+
+### 2. **Metrics Visible in /metrics but Not in Monitoring System (CRITICAL ISSUE)**
 
 **Problem**: HTTP metrics appear in the `/metrics` endpoint but don't show up in Prometheus/Grafana dashboards.
 
@@ -791,7 +833,7 @@ gunicorn --workers 4 src.main:app
 
 **Prevention**: Always implement dual metrics system when using OpenTelemetry Collector.
 
-### 2. **Inconsistent Metrics (Second Most Common Issue)**
+### 3. **Inconsistent Metrics (Second Most Common Issue)**
 
 **Problem**: Metrics counts go up and down randomly, don't match actual API calls.
 
@@ -799,7 +841,7 @@ gunicorn --workers 4 src.main:app
 
 **Solution**: Use single-process deployment (Uvicorn instead of multi-worker Gunicorn).
 
-### 3. **Duplicate Registration Errors**
+### 4. **Duplicate Registration Errors**
 
 **Problem**: `ValueError: Duplicated timeseries in CollectorRegistry`
 
@@ -807,7 +849,7 @@ gunicorn --workers 4 src.main:app
 
 **Solution**: Use the `_get_or_create_metric()` pattern shown in the code above.
 
-### 4. **High Cardinality Metrics**
+### 5. **High Cardinality Metrics**
 
 **Problem**: Too many unique label combinations, causing memory issues.
 
@@ -815,7 +857,7 @@ gunicorn --workers 4 src.main:app
 
 **Solution**: Implement proper route pattern extraction in `_extract_route_pattern()`.
 
-### 5. **Missing Metrics for Some Endpoints**
+### 6. **Missing Metrics for Some Endpoints**
 
 **Problem**: Some endpoints don't show up in metrics.
 
@@ -859,14 +901,17 @@ uvicorn src.main:app --host 0.0.0.0 --port 8088
 curl http://localhost:8088/api/v1/users
 curl http://localhost:8088/api/v1/orders/123
 
-# Check metrics
+# Check metrics (should return 200, not 307)
+curl -v http://localhost:8088/metrics
 curl http://localhost:8088/metrics | grep http_request_duration_count
 ```
 
 ### 3. Validation Checklist
 
 #### Prometheus Metrics (via /metrics endpoint)
-- [ ] Metrics endpoint (`/metrics`) returns data
+- [ ] Metrics endpoint (`/metrics`) returns 200 OK (not 307 redirect)
+- [ ] `curl -v http://localhost:8088/metrics` shows direct response without redirects
+- [ ] Metrics endpoint returns proper content-type: `text/plain; version=0.0.4; charset=utf-8`
 - [ ] `http_requests_total` counter increases with each request
 - [ ] `http_request_duration_count` matches `http_requests_total`
 - [ ] `http_requests_in_flight` shows 0 when no requests are processing
@@ -923,24 +968,29 @@ Look for these log messages:
 
 ### Common Error Messages
 
-1. **"Failed to record OpenTelemetry HTTP requests total counter"**
+1. **"HTTP/1.1 307 Temporary Redirect" from /metrics endpoint**
+   - Using `app.mount("/metrics", metrics_app)` instead of FastAPI route
+   - Replace with `@app.get("/metrics")` route as shown above
+   - Verify with `curl -v http://localhost:8088/metrics` - should return 200, not 307
+
+2. **"Failed to record OpenTelemetry HTTP requests total counter"**
    - OpenTelemetry meter not properly initialized
    - Check that OpenTelemetry SDK is configured in your main.py
    - Verify OTLP exporters are configured correctly
 
-2. **"Failed to create OpenTelemetry metrics"**
+3. **"Failed to create OpenTelemetry metrics"**
    - OpenTelemetry dependencies missing or not imported
    - MeterProvider not set up correctly
    - Check that `opentelemetry-api` and `opentelemetry-sdk` are installed
 
-3. **"Failed to record HTTP requests total counter"** (Prometheus)
+4. **"Failed to record HTTP requests total counter"** (Prometheus)
    - Check if Prometheus metrics are properly initialized
    - Verify no duplicate registration issues
 
-4. **"Metric already registered in Prometheus"**
+5. **"Metric already registered in Prometheus"**
    - Module reload issue, should be handled gracefully by dummy metrics
 
-5. **"Invalid status code type"**
+6. **"Invalid status code type"**
    - Response object not returning proper status code
    - Check your FastAPI response handling
 
@@ -1044,16 +1094,18 @@ async def health_live():
 
 ## Best Practices
 
-1. **Dual Metrics System**: ALWAYS implement both Prometheus and OpenTelemetry metrics when using OpenTelemetry Collector
-2. **Single Process Deployment**: Always use single-process deployment for consistent metrics
-3. **Route Parameterization**: Always parameterize URLs with IDs to prevent high cardinality
-4. **Error Handling**: Wrap all metric operations in try-catch blocks for both systems
-5. **Structured Logging**: Use structured logging for better observability
-6. **Testing**: Always test BOTH Prometheus and OpenTelemetry metrics in your CI/CD pipeline
-7. **Documentation**: Document your service-specific route patterns
-8. **End-to-End Validation**: Verify metrics flow from service → collector → Prometheus → dashboards
-9. **Monitoring the Monitoring**: Set up alerts for metric collection failures
-10. **Consistent Naming**: Use identical metric names and attributes across both systems
+1. **Direct Metrics Endpoint**: Use FastAPI routes (`@app.get("/metrics")`) instead of mounting (`app.mount("/metrics")`) to avoid 307 redirects
+2. **Dual Metrics System**: ALWAYS implement both Prometheus and OpenTelemetry metrics when using OpenTelemetry Collector
+3. **Single Process Deployment**: Always use single-process deployment for consistent metrics
+4. **Route Parameterization**: Always parameterize URLs with IDs to prevent high cardinality
+5. **Error Handling**: Wrap all metric operations in try-catch blocks for both systems
+6. **Structured Logging**: Use structured logging for better observability
+7. **Testing**: Always test BOTH Prometheus and OpenTelemetry metrics in your CI/CD pipeline
+8. **Documentation**: Document your service-specific route patterns
+9. **End-to-End Validation**: Verify metrics flow from service → collector → Prometheus → dashboards
+10. **Monitoring the Monitoring**: Set up alerts for metric collection failures
+11. **Consistent Naming**: Use identical metric names and attributes across both systems
+12. **Redirect Prevention**: Always verify `/metrics` endpoint returns 200 OK, not 307 redirects
 
 ## Support
 

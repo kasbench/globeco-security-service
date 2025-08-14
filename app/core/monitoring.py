@@ -101,31 +101,13 @@ def _get_or_create_metric(metric_class, name: str, description: str, **kwargs) -
         return dummy_metric
 
 
-# Initialize OpenTelemetry meter if available
+# Initialize OpenTelemetry meter using the global meter provider
 otel_meter = None
 if OTEL_AVAILABLE:
     try:
-        # Create resource with service information
-        resource = Resource.create({
-            "service.name": "security-service",
-            "service.version": "1.0.0"
-        })
-        
-        # Create OTLP exporter (will be configured via environment variables)
-        otlp_exporter = OTLPMetricExporter()
-        
-        # Create meter provider with periodic export
-        meter_provider = MeterProvider(
-            resource=resource,
-            metric_readers=[PeriodicExportingMetricReader(otlp_exporter, export_interval_millis=5000)]
-        )
-        
-        # Set the global meter provider
-        otel_metrics.set_meter_provider(meter_provider)
-        
-        # Get meter for this module
+        # Use the global meter provider (set up in main.py)
         otel_meter = otel_metrics.get_meter(__name__)
-        logger.info("OpenTelemetry metrics initialized successfully")
+        logger.info("OpenTelemetry metrics initialized successfully using global meter provider")
         
     except Exception as e:
         logger.error(f"Failed to initialize OpenTelemetry metrics: {e}")
@@ -157,13 +139,43 @@ HTTP_REQUESTS_IN_FLIGHT = _get_or_create_metric(
     'Number of HTTP requests currently being processed'
 )
 
-# OpenTelemetry HTTP Metrics
-otel_http_requests_total = None
-otel_http_request_duration = None
-otel_http_requests_in_flight = None
+# OpenTelemetry HTTP Metrics - will be initialized in setup_otel_metrics()
+otel_http_requests_total = DummyOTelMetric()
+otel_http_request_duration = DummyOTelMetric()
+otel_http_requests_in_flight = DummyOTelMetric()
 
-if otel_meter:
+
+def get_metrics_registry_info() -> Dict[str, Any]:
+    """
+    Get information about the current metrics registry for debugging.
+    
+    Returns:
+        Dictionary containing registry information
+    """
+    return {
+        "registered_metrics": list(_METRICS_REGISTRY.keys()),
+        "opentelemetry_available": OTEL_AVAILABLE,
+        "opentelemetry_meter_initialized": otel_meter is not None,
+        "prometheus_metrics_count": len([k for k in _METRICS_REGISTRY.keys() if not k.startswith("Dummy")])
+    }
+
+
+def setup_otel_metrics() -> None:
+    """
+    Setup OpenTelemetry metrics after the global meter provider is initialized.
+    This should be called from main.py after the meter provider is set up.
+    """
+    global otel_meter, otel_http_requests_total, otel_http_request_duration, otel_http_requests_in_flight
+    
+    if not OTEL_AVAILABLE:
+        logger.warning("OpenTelemetry not available, skipping OTEL metrics setup")
+        return
+    
     try:
+        # Get meter from the global meter provider
+        otel_meter = otel_metrics.get_meter(__name__)
+        
+        # Create OpenTelemetry HTTP metrics
         otel_http_requests_total = otel_meter.create_counter(
             name="http_requests_total",
             description="Total number of HTTP requests",
@@ -190,26 +202,6 @@ if otel_meter:
         otel_http_requests_total = DummyOTelMetric()
         otel_http_request_duration = DummyOTelMetric()
         otel_http_requests_in_flight = DummyOTelMetric()
-else:
-    # Create dummy metrics if OpenTelemetry is not available
-    otel_http_requests_total = DummyOTelMetric()
-    otel_http_request_duration = DummyOTelMetric()
-    otel_http_requests_in_flight = DummyOTelMetric()
-
-
-def get_metrics_registry_info() -> Dict[str, Any]:
-    """
-    Get information about the current metrics registry for debugging.
-    
-    Returns:
-        Dictionary containing registry information
-    """
-    return {
-        "registered_metrics": list(_METRICS_REGISTRY.keys()),
-        "opentelemetry_available": OTEL_AVAILABLE,
-        "opentelemetry_meter_initialized": otel_meter is not None,
-        "prometheus_metrics_count": len([k for k in _METRICS_REGISTRY.keys() if not k.startswith("Dummy")])
-    }
 
 
 def reset_metrics_registry() -> None:
@@ -1153,6 +1145,8 @@ def setup_monitoring(app):
     Returns:
         Configured instrumentator instance if available, None otherwise
     """
+    # Setup OpenTelemetry metrics using the global meter provider
+    setup_otel_metrics()
     try:
         # Try to import prometheus-fastapi-instrumentator
         from prometheus_fastapi_instrumentator import Instrumentator, metrics
