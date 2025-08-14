@@ -12,14 +12,14 @@
   - Create Prometheus Gauge for `http_requests_in_flight` with no labels
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1, 3.2, 3.3_
 
-- [ ] 3. Implement OpenTelemetry HTTP metrics
+- [x] 3. Implement OpenTelemetry HTTP metrics
   - Create OpenTelemetry Counter for `http_requests_total` using meter.create_counter()
   - Create OpenTelemetry Histogram for `http_request_duration` with millisecond unit
   - Create OpenTelemetry UpDownCounter for `http_requests_in_flight`
   - Add error handling with dummy metrics fallback for initialization failures
   - _Requirements: 2.1, 2.2, 2.3, 4.2_
 
-- [ ] 4. Create EnhancedHTTPMetricsMiddleware class
+- [-] 4. Create EnhancedHTTPMetricsMiddleware class
   - Implement BaseHTTPMiddleware subclass with async dispatch method
   - Add high-precision timing using time.perf_counter() for millisecond accuracy
   - Implement in-flight request tracking with proper increment/decrement in try/finally blocks
