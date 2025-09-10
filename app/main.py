@@ -51,7 +51,7 @@ metric_readers = [
     ),
     PeriodicExportingMetricReader(
         OTLPMetricExporterHTTP(
-            endpoint=f"http://otel-collector-collector.monitoring.svc.cluster.local:4318/v1/metrics"
+            endpoint=f"http://otel-collector-daemonset-collector.monitoring.svc.cluster.local:4318/v1/metrics"
         )
     )
 ]

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # OpenTelemetry settings
     OTEL_EXPORTER_OTLP_ENDPOINT: str = Field(
-        default="otel-collector-collector.monitoring.svc.cluster.local:4317", 
+        default="otel-collector-daemonset-collector.monitoring.svc.cluster.local:4317", 
         env="OTEL_EXPORTER_OTLP_ENDPOINT",
         description="OpenTelemetry collector endpoint for metrics export"
     )

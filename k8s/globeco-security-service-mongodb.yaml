@@ -13,6 +13,19 @@ spec:
   selector:
     app: globeco-security-service-mongodb
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: security-service-mongodb-pvc
+  namespace: globeco
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-storage
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -44,12 +57,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
-  volumeClaimTemplates:
-    - metadata:
-        name: mongodb-data-security-service
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: 5Gi
-        storageClassName: local-storage 
+      volumes:
+        - name: mongodb-data-security-service
+          persistentVolumeClaim:
+            claimName: security-service-mongodb-pvc 

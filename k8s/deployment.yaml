@@ -22,8 +22,16 @@ spec:
           ports:
             - containerPort: 8000
           env:
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "otel-collector-daemonset-collector.monitoring.svc.cluster.local:4317"
+            # Inject the node IP from the Downward API
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            # Point OTEL exporter to the local collector on the same node
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "otel-collector-collector.monitoring.svc.cluster.local:4317"
+              value: "$(NODE_IP):4317"
             - name: OTEL_SERVICE_NAME
               value: "globeco-security-service"
             - name: OTEL_EXPORTER_OTLP_INSECURE
@@ -55,23 +63,4 @@ spec:
               port: 8000
             failureThreshold: 30
             periodSeconds: 10
-# ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: globeco-security-service
-#   namespace: globeco
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: globeco-security-service
-#   minReplicas: 1
-#   maxReplicas: 100
-#   metrics:
-#     - type: Resource
-#       resource:
-#         name: cpu
-#         target:
-#           type: Utilization
-#           averageUtilization: 80 
+
