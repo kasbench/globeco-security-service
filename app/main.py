@@ -28,6 +28,25 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPMetricExporterHTTP
 from opentelemetry.metrics import set_meter_provider
 
+# Additional instrumentation imports
+try:
+    from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
+    SYSTEM_METRICS_AVAILABLE = True
+except ImportError:
+    SYSTEM_METRICS_AVAILABLE = False
+
+try:
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+
+try:
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
 # --- OpenTelemetry setup ---
 resource = Resource.create({
     "service.name": settings.OTEL_SERVICE_NAME
@@ -57,6 +76,28 @@ metric_readers = [
 ]
 meter_provider = MeterProvider(resource=resource, metric_readers=metric_readers)
 set_meter_provider(meter_provider)
+
+# Initialize additional instrumentation for standard Python metrics
+if SYSTEM_METRICS_AVAILABLE:
+    try:
+        SystemMetricsInstrumentor().instrument()
+        print("✅ System metrics instrumentation initialized")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize system metrics: {e}")
+
+if HTTPX_AVAILABLE:
+    try:
+        HTTPXClientInstrumentor().instrument()
+        print("✅ HTTPX client instrumentation initialized")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize HTTPX instrumentation: {e}")
+
+if REQUESTS_AVAILABLE:
+    try:
+        RequestsInstrumentor().instrument()
+        print("✅ Requests client instrumentation initialized")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize Requests instrumentation: {e}")
 
 # --- FastAPI app instantiation ---
 app = FastAPI(title="GlobeCo Security Service", version="1.0.0")
