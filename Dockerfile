@@ -26,4 +26,7 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 
 # Start the FastAPI app with Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"] 
+# --log-level error: Suppress upgrade warnings
+# --no-access-log: Disable access logs for health checks
+# --ws none: Explicitly disable WebSocket support to avoid upgrade attempts
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "error", "--no-access-log", "--ws", "none"] 

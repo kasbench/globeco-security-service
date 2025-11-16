@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: globeco-security-service
-          image: kasbench/globeco-security-service:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: kasbench/globeco-security-service:1.0.1
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:
@@ -49,18 +49,28 @@ spec:
             httpGet:
               path: /health/liveness
               port: 8000
+              scheme: HTTP
             initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health/readiness
               port: 8000
+              scheme: HTTP
             initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
           startupProbe:
             httpGet:
               path: /health/startup
               port: 8000
+              scheme: HTTP
             failureThreshold: 30
             periodSeconds: 10
+            timeoutSeconds: 5
 

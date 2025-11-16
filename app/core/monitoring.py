@@ -509,10 +509,14 @@ class EnhancedHTTPMetricsMiddleware:
             )
         
         # Log slow requests with structured context
-        if duration_ms > 1000:
+        # Skip warning for health check endpoints as they may legitimately take longer
+        is_health_check = path.startswith("/health")
+        slow_threshold = 2000 if is_health_check else 1000
+        
+        if duration_ms > slow_threshold:
             logger.warning(
                 "Slow request detected",
-                extra={**log_context, "threshold_ms": 1000}
+                extra={**log_context, "threshold_ms": slow_threshold}
             )
     
     def _extract_route_pattern(self, path: str) -> str:
