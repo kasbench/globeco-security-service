@@ -509,14 +509,18 @@ class EnhancedHTTPMetricsMiddleware:
             )
         
         # Log slow requests with structured context
-        # Skip warning for health check endpoints as they may legitimately take longer
+        # Health checks may take longer due to MongoDB ping, use higher threshold
         is_health_check = path.startswith("/health")
-        slow_threshold = 2000 if is_health_check else 1000
+        slow_threshold = 500 if is_health_check else 250
         
         if duration_ms > slow_threshold:
             logger.warning(
-                "Slow request detected",
-                extra={**log_context, "threshold_ms": slow_threshold}
+                f"Slow request detected: {method_label} {path} took {duration_ms:.2f}ms (threshold: {slow_threshold}ms)",
+                extra={
+                    **log_context, 
+                    "threshold_ms": slow_threshold,
+                    "is_health_check": is_health_check
+                }
             )
     
     def _extract_route_pattern(self, path: str) -> str:

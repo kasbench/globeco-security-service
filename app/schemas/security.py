@@ -19,7 +19,7 @@ class SecurityOut(SecurityBase):
     securityType: SecurityTypeNested
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class SecurityUpdate(SecurityBase):
     securityId: str 

@@ -10,11 +10,17 @@ import math
 
 async def get_all_securities() -> List[SecurityOut]:
     securities = await Security.find_all().to_list()
+    
+    # Batch fetch all security types to avoid N+1 queries
+    security_type_ids = list(set(sec.security_type_id for sec in securities))
+    security_types = await SecurityType.find({"_id": {"$in": security_type_ids}}).to_list()
+    security_types_map = {st.id: st for st in security_types}
+    
     result = []
     for sec in securities:
-        st = await SecurityType.get(sec.security_type_id)
+        st = security_types_map.get(sec.security_type_id)
         if not st:
-            raise HTTPException(status_code=400, detail="Invalid securityTypeId")
+            raise HTTPException(status_code=400, detail=f"Invalid securityTypeId: {sec.security_type_id}")
         result.append(SecurityOut(
             securityId=str(sec.id),
             ticker=sec.ticker,
@@ -30,23 +36,41 @@ async def get_all_securities() -> List[SecurityOut]:
     return result
 
 async def get_security(security_id: str) -> SecurityOut:
-    sec = await Security.get(PydanticObjectId(security_id))
-    if not sec:
+    # Use aggregation pipeline to fetch security and security type in a single query
+    pipeline = [
+        {"$match": {"_id": PydanticObjectId(security_id)}},
+        {
+            "$lookup": {
+                "from": "securityType",
+                "localField": "security_type_id",
+                "foreignField": "_id",
+                "as": "security_type"
+            }
+        },
+        {"$unwind": "$security_type"}
+    ]
+    
+    result = await Security.get_motor_collection().aggregate(pipeline).to_list(length=1)
+    
+    if not result:
         raise HTTPException(status_code=404, detail="Security not found")
-    st = await SecurityType.get(sec.security_type_id)
-    if not st:
+    
+    sec_data = result[0]
+    st_data = sec_data.get("security_type")
+    
+    if not st_data:
         raise HTTPException(status_code=400, detail="Invalid securityTypeId")
+    
     return SecurityOut(
-        # securityId=str(sec.id),
-        securityId = str(security_id),
-        ticker=sec.ticker,
-        description=sec.description,
-        securityTypeId=str(sec.security_type_id),
-        version=sec.version,
+        securityId=str(sec_data["_id"]),
+        ticker=sec_data["ticker"],
+        description=sec_data["description"],
+        securityTypeId=str(sec_data["security_type_id"]),
+        version=sec_data["version"],
         securityType=SecurityTypeNested(
-            securityTypeId=str(st.id),
-            abbreviation=st.abbreviation,
-            description=st.description
+            securityTypeId=str(st_data["_id"]),
+            abbreviation=st_data["abbreviation"],
+            description=st_data["description"]
         )
     )
 
@@ -119,12 +143,17 @@ async def search_securities(
     # Execute search with pagination and sorting
     securities = await Security.find(query).sort("ticker").skip(offset).limit(limit).to_list()
     
+    # Batch fetch all security types to avoid N+1 queries
+    security_type_ids = list(set(sec.security_type_id for sec in securities))
+    security_types = await SecurityType.find({"_id": {"$in": security_type_ids}}).to_list()
+    security_types_map = {st.id: st for st in security_types}
+    
     # Build response with security type information
     result_securities = []
     for sec in securities:
-        st = await SecurityType.get(sec.security_type_id)
+        st = security_types_map.get(sec.security_type_id)
         if not st:
-            raise HTTPException(status_code=400, detail="Invalid securityTypeId")
+            raise HTTPException(status_code=400, detail=f"Invalid securityTypeId: {sec.security_type_id}")
         
         result_securities.append(SecurityV2(
             securityId=str(sec.id),

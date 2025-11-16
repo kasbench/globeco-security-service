@@ -10,7 +10,7 @@ class SecurityType(Document):
         name = "securityType"
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "abbreviation": "EQ",
                 "description": "Equity security type",

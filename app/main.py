@@ -133,7 +133,17 @@ if settings.enable_metrics:
 
 @app.on_event("startup")
 async def on_startup():
-    client = AsyncIOMotorClient(settings.MONGODB_URI)
+    # Configure MongoDB client with connection pooling for better performance
+    client = AsyncIOMotorClient(
+        settings.MONGODB_URI,
+        maxPoolSize=50,           # Maximum connections in the pool
+        minPoolSize=10,           # Minimum connections to maintain
+        maxIdleTimeMS=45000,      # Close idle connections after 45 seconds
+        waitQueueTimeoutMS=5000,  # Wait up to 5 seconds for a connection from pool
+        serverSelectionTimeoutMS=5000,  # Timeout for server selection
+        connectTimeoutMS=10000,   # Timeout for initial connection
+        socketTimeoutMS=10000,    # Timeout for socket operations
+    )
     db = client[settings.MONGODB_DB]
     await init_beanie(database=db, document_models=[SecurityType, Security])
     
@@ -141,6 +151,7 @@ async def on_startup():
     try:
         await Security.get_motor_collection().create_index("ticker")  # For exact matches
         await Security.get_motor_collection().create_index([("ticker", "text")])  # For text search
+        await Security.get_motor_collection().create_index("security_type_id")  # For joins with security types
     except Exception as e:
         print(f"Index creation failed: {e}")  # Non-fatal for development
     
