@@ -1,0 +1,5 @@
+
+mongodb-persistent-volume-claim.yaml
+globeco-security-service-mongodb.yaml
+deployment.yaml
+service.yaml

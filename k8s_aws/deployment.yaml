@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: globeco-security-service
+  namespace: globeco
+  labels:
+    app: globeco-security-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: globeco-security-service
+  template:
+    metadata:
+      labels:
+        app: globeco-security-service
+    spec:
+      containers:
+        - name: globeco-security-service
+          image: kasbench/globeco-security-service:1.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "otel-collector-daemonset-collector.monitoring.svc.cluster.local:4317"
+            # Inject the node IP from the Downward API
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            # Point OTEL exporter to the local collector on the same node
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "$(NODE_IP):4317"
+            - name: OTEL_SERVICE_NAME
+              value: "globeco-security-service"
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: ENABLE_METRICS
+              value: "true"
+          resources:
+            requests:
+              cpu: "425m"
+              memory: "200Mi"
+            limits:
+              cpu: "425m"
+              memory: "200Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: 8000
+              scheme: HTTP
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+
