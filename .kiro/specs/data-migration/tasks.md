@@ -6,27 +6,27 @@ This plan implements a custom database migration system for the GlobeCo Security
 
 ## Tasks
 
-- [ ] 1. Set up migration module structure and core models
-  - [ ] 1.1 Remove `mongo-migrate` dependency and add `hypothesis` to pyproject.toml
+- [x] 1. Set up migration module structure and core models
+  - [x] 1.1 Remove `mongo-migrate` dependency and add `hypothesis` to pyproject.toml
     - Remove the line `"mongo-migrate>=0.1.2"` from the `dependencies` list in `pyproject.toml`
     - Add `"hypothesis>=6.100.0"` to the `dependencies` list in `pyproject.toml`
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 1.2 Create `app/migrations/models.py` with MigrationRecord and MigrationError
+  - [x] 1.2 Create `app/migrations/models.py` with MigrationRecord and MigrationError
     - Create `app/migrations/models.py`
     - Define `MigrationRecord` dataclass with fields: `name: str`, `applied_at: datetime`, `status: str`
     - Define `MigrationError` exception class that wraps a migration name and cause exception
     - Define `MigrationDescriptor` as a NamedTuple or dataclass with fields: `version: str`, `name: str`, `fn: Callable`
     - _Requirements: 2.1, 2.2, 3.3_
 
-  - [ ] 1.3 Create `app/migrations/__init__.py` with migration registry
+  - [x] 1.3 Create `app/migrations/__init__.py` with migration registry
     - Create `app/migrations/__init__.py`
     - Define `MIGRATIONS: list[MigrationDescriptor]` as an empty list initially (will be populated after seed migration is created)
     - Export `MIGRATIONS`, `MigrationDescriptor`, `MigrationRecord`, `MigrationError`
     - _Requirements: 3.2_
 
-- [ ] 2. Implement migration runner
-  - [ ] 2.1 Create `app/migrations/runner.py` with `run_migrations` function
+- [x] 2. Implement migration runner
+  - [x] 2.1 Create `app/migrations/runner.py` with `run_migrations` function
     - Create `app/migrations/runner.py`
     - Implement `async def run_migrations(db: AsyncIOMotorDatabase) -> None`
     - Query `migration_history` collection for documents with `status: "success"` to get applied migration names
@@ -69,17 +69,17 @@ This plan implements a custom database migration system for the GlobeCo Security
     - Assert: `MigrationError` is raised AND no success record is written for the failing migration
     - **Validates: Requirements 3.3**
 
-- [ ] 3. Checkpoint - Verify runner logic
+- [x] 3. Checkpoint - Verify runner logic
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement seed migration
-  - [ ] 4.1 Create `app/migrations/data/securities.json` seed data file
+- [x] 4. Implement seed migration
+  - [x] 4.1 Create `app/migrations/data/securities.json` seed data file
     - Create directory `app/migrations/data/`
     - Create `securities.json` containing a JSON array of 505 objects, each with `ticker` and `description` fields
     - Data represents S&P 500 constituents (e.g., `{"ticker": "AAPL", "description": "Apple Inc."}`)
     - _Requirements: 6.1, 6.2_
 
-  - [ ] 4.2 Create `app/migrations/v001_seed_security_data.py`
+  - [x] 4.2 Create `app/migrations/v001_seed_security_data.py`
     - Implement `async def seed_security_data(db: AsyncIOMotorDatabase) -> None`
     - Insert one SecurityType document: `{abbreviation: "CS", description: "Common Stock", version: 1}` into the `securityType` collection
     - Read `securities.json` from the `data/` subdirectory (use `pathlib.Path(__file__).parent / "data" / "securities.json"`)
@@ -88,7 +88,7 @@ This plan implements a custom database migration system for the GlobeCo Security
     - If SecurityType insertion fails, abort without inserting any Security documents
     - _Requirements: 5.1, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3_
 
-  - [ ] 4.3 Register the seed migration in `app/migrations/__init__.py`
+  - [x] 4.3 Register the seed migration in `app/migrations/__init__.py`
     - Import `seed_security_data` from `app.migrations.v001_seed_security_data`
     - Add `MigrationDescriptor(version="V001", name="seed_security_data", fn=seed_security_data)` to the `MIGRATIONS` list
     - _Requirements: 3.2_
@@ -109,11 +109,11 @@ This plan implements a custom database migration system for the GlobeCo Security
     - Test: if SecurityType insert fails, no Security documents are created
     - _Requirements: 5.1, 5.2, 6.1, 7.1, 7.3_
 
-- [ ] 5. Checkpoint - Verify seed migration
+- [x] 5. Checkpoint - Verify seed migration
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Integrate migration runner into application startup
-  - [ ] 6.1 Update `app/main.py` to call `run_migrations` before `init_beanie`
+- [x] 6. Integrate migration runner into application startup
+  - [x] 6.1 Update `app/main.py` to call `run_migrations` before `init_beanie`
     - Import `run_migrations` from `app.migrations.runner`
     - In `on_startup()`, after creating the Motor client and `db` reference but BEFORE `init_beanie()`, add `await run_migrations(db)`
     - _Requirements: 3.1, 4.1_
@@ -125,7 +125,7 @@ This plan implements a custom database migration system for the GlobeCo Security
     - Test: migration check with all-applied completes within 5 seconds
     - _Requirements: 3.1, 4.1, 4.2_
 
-- [ ] 7. Final checkpoint - Ensure all tests pass
+- [x] 7. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

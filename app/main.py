@@ -8,6 +8,7 @@ from app.models.security import Security
 from app.api.routes import router as api_router
 from app.api.v2_routes import router as v2_api_router
 from app.api.health import router as health_router
+from app.migrations.runner import run_migrations
 import os
 from fastapi.middleware.cors import CORSMiddleware
 # Enhanced HTTP metrics imports
@@ -145,6 +146,10 @@ async def on_startup():
         socketTimeoutMS=10000,    # Timeout for socket operations
     )
     db = client[settings.MONGODB_DB]
+
+    # Run migrations BEFORE Beanie init
+    await run_migrations(db)
+
     await init_beanie(database=db, document_models=[SecurityType, Security])
     
     # Create indexes for optimal search performance
