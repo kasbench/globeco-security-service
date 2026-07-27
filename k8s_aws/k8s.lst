@@ -4,3 +4,4 @@ globeco-security-service-mongodb.yaml
 deployment.yaml
 service.yaml
 hpa.yaml
+vpa.yaml
