@@ -38,6 +38,11 @@ spec:
               value: "true"
             - name: ENABLE_METRICS
               value: "true"
+          resizePolicy:
+            - resourceName: cpu
+              restartPolicy: NotRequired
+            - resourceName: memory
+              restartPolicy: RestartContainer
           resources:
             requests:
               cpu: "425m"
